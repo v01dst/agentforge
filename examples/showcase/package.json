@@ -1,0 +1,28 @@
+{
+  "name": "@agentforge/examples",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx basic-agent.ts",
+    "basic": "tsx basic-agent.ts",
+    "tool": "tsx custom-tool.ts",
+    "workflow": "tsx research-workflow.ts",
+    "multi-agent": "tsx multi-agent-workflow.ts",
+    "provider": "tsx custom-model-provider.ts",
+    "memory": "tsx custom-memory-provider.ts"
+  },
+  "dependencies": {
+    "@agentforge/core": "workspace:*",
+    "@agentforge/memory": "workspace:*",
+    "@agentforge/models": "workspace:*",
+    "@agentforge/tools": "workspace:*",
+    "@agentforge/workflows": "workspace:*",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "zod": "^3.24.1"
+  }
+}

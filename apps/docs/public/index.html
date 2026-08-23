@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="AgentForge documentation" />
+    <title>AgentForge Docs</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <aside>
+      <a class="brand" href="#top"><span>AF</span> AgentForge <small>v0.1</small></a>
+      <nav>
+        <a href="#quick-start">Quick start</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#agents">Agents & tools</a>
+        <a href="#workflows">Workflows</a>
+        <a href="#providers">Providers</a>
+        <a href="#security">Security</a>
+      </nav>
+    </aside>
+    <main id="top">
+      <header>
+        <p class="kicker">Model-agnostic agent infrastructure</p>
+        <h1>Build agents you can inspect, compose, and replace.</h1>
+        <p>AgentForge is a typed runtime, workflow engine, CLI, and visual control plane for production-minded AI systems.</p>
+      </header>
+      <section id="quick-start">
+        <h2>Quick start</h2>
+        <pre><code>pnpm install
+pnpm build
+pnpm --filter @agentforge/examples basic
+pnpm --filter @agentforge/playground dev</code></pre>
+      </section>
+      <section id="architecture">
+        <h2>Architecture</h2>
+        <div class="pipeline" aria-label="AgentForge architecture">
+          <span>SDK / CLI / Playground</span><b>→</b><span>Agent runtime</span><b>→</b><span>Models + tools</span><b>→</b><span>Events + storage</span>
+        </div>
+        <p>Provider-specific code remains inside adapters. Runtime contracts live in <code>@agentforge/core</code>; the convenience facade is <code>@agentforge/sdk</code>.</p>
+      </section>
+      <section id="agents">
+        <h2>Agents & tools</h2>
+        <pre><code>const agent = new Agent({
+  name: 'researcher',
+  model: createModel({ provider: 'mock' }),
+  tools: [webSearchTool],
+  maxIterations: 8,
+});
+
+const result = await agent.run('Research typed agent runtimes.');</code></pre>
+      </section>
+      <section id="workflows">
+        <h2>Workflows</h2>
+        <p>Graphs support sequential nodes, labeled conditions, parallel branches, retries, cancellation, execution limits, history, and approval callbacks.</p>
+      </section>
+      <section id="providers">
+        <h2>Providers</h2>
+        <dl><dt>OpenAI</dt><dd><code>OPENAI_API_KEY</code></dd><dt>Anthropic</dt><dd><code>ANTHROPIC_API_KEY</code></dd><dt>Google Gemini</dt><dd><code>GOOGLE_API_KEY</code></dd><dt>Local</dt><dd>Implement <code>ModelProvider</code> or point the OpenAI-compatible adapter at a local gateway.</dd></dl>
+      </section>
+      <section id="security">
+        <h2>Security</h2>
+        <p>Keep restricted tools opt-in, use host and command allowlists, validate all structured values, enforce timeouts, and redact secrets before events are persisted.</p>
+      </section>
+    </main>
+  </body>
+</html>

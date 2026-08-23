@@ -1,0 +1,58 @@
+import { formatError, error, info } from './output.js';
+import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, runCommand, testCommand } from './commands.js';
+import type { ParsedCli } from './types.js';
+
+export function parseArgs(argv: string[]): ParsedCli {
+  const args: string[] = []; const flags: Record<string, string | boolean> = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const value = argv[index];
+    if (!value) continue;
+    if (value === '--') { args.push(...argv.slice(index + 1)); break; }
+    if (value.startsWith('--')) {
+      const [rawKey, inline] = value.slice(2).split('=', 2);
+      const key = rawKey ?? '';
+      if (!key) continue;
+      const next = argv[index + 1];
+      if (inline !== undefined) flags[key] = inline;
+      else if (next && !next.startsWith('-')) { flags[key] = next; index += 1; }
+      else flags[key] = true;
+    } else if (value.startsWith('-') && value.length > 1) {
+      for (const short of value.slice(1)) flags[short === 'h' ? 'help' : short === 'v' ? 'version' : short] = true;
+    } else args.push(value);
+  }
+  const [command, ...rest] = args;
+  return { command, args: rest, flags };
+}
+
+export async function execute(argv: string[] = process.argv.slice(2)): Promise<number> {
+  const parsed = parseArgs(argv);
+  const cwd = typeof parsed.flags.cwd === 'string' ? parsed.flags.cwd : undefined;
+  if (cwd) process.chdir(cwd);
+  if (parsed.flags.help) { info(HELP); return 0; }
+  if (parsed.flags.version) { info(VERSION); return 0; }
+  if (!parsed.command) {
+    const { loadConfig } = await import('./config.js');
+    const { config } = await loadConfig({ required: false });
+    if (config.entry) return await chatCommand(undefined, parsed.flags);
+    info(HELP); return 0;
+  }
+  switch (parsed.command) {
+    case 'init': return await initCommand(parsed.args[0], parsed.flags);
+    case 'dev': return await devCommand(parsed.flags);
+    case 'run': return await runCommand(parsed.args[0], parsed.flags);
+    case 'chat': return await chatCommand(parsed.args[0], parsed.flags);
+    case 'test': return await testCommand(parsed.args);
+    case 'inspect': return await inspectCommand(parsed.args[0], parsed.flags);
+    case 'providers': return await listCommand('providers', parsed.flags);
+    case 'tools': return await listCommand('tools', parsed.flags);
+    case 'workflows': return await listCommand('workflows', parsed.flags);
+    case 'doctor': return await doctorCommand(parsed.flags);
+    case 'connect': return await connectCommand(parsed.args[0], parsed.flags);
+    default: throw new Error(`Unknown command: ${parsed.command}. Run agentforge --help.`);
+  }
+}
+
+export async function main(argv?: string[]): Promise<void> {
+  try { process.exitCode = await execute(argv); }
+  catch (caught) { error(formatError(caught)); process.exitCode = 1; }
+}

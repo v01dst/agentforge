@@ -1,0 +1,13 @@
+{
+  "name": "@agentforge/docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node server.mjs",
+    "lint": "node --check build.mjs && node --check server.mjs",
+    "typecheck": "node --check build.mjs && node --check server.mjs",
+    "test": "node --test test/*.test.mjs"
+  }
+}

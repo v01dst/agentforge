@@ -1,0 +1,83 @@
+import type { Message, ModelChunk, ModelProvider, ModelRequest, ModelResponse, ToolCall, TokenUsage } from '@agentforge/core';
+
+export interface HttpModelOptions { apiKey?: string; baseUrl?: string; fetch?: typeof globalThis.fetch; headers?: Record<string, string>; }
+
+const id = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+const usage = (input = 0, output = 0): TokenUsage => ({ inputTokens: input, outputTokens: output, totalTokens: input + output });
+const asString = (value: unknown): string => typeof value === 'string' ? value : value == null ? '' : JSON.stringify(value);
+
+export class MockModel implements ModelProvider {
+  readonly provider = 'mock';
+  readonly model: string;
+  private index = 0;
+  constructor(private readonly options: { responses?: string[]; model?: string; toolCalls?: ToolCall[][]; latencyMs?: number } = {}) { this.model = options.model ?? 'mock-v1'; }
+  async generate(request: ModelRequest): Promise<ModelResponse> {
+    if (request.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (this.options.latencyMs) await new Promise((resolve) => setTimeout(resolve, this.options.latencyMs));
+    const response = this.options.responses?.[this.index % this.options.responses.length] ?? `Mock response: ${request.messages.at(-1)?.content ?? ''}`;
+    const calls = this.options.toolCalls?.[this.index]; this.index += 1;
+    return { id: id('mock'), content: response, toolCalls: calls, finishReason: calls?.length ? 'tool_calls' : 'stop', usage: usage(Math.ceil(JSON.stringify(request.messages).length / 4), Math.ceil(response.length / 4)), model: this.model };
+  }
+  async *stream(request: ModelRequest): AsyncIterable<ModelChunk> { const response = await this.generate(request); for (const token of response.content.split(/(\s+)/)) yield { id: response.id, delta: token }; yield { id: response.id, delta: '', done: true, usage: response.usage }; }
+}
+
+export class OpenAIModel implements ModelProvider {
+  readonly provider = 'openai';
+  readonly model: string;
+  private readonly fetcher: typeof globalThis.fetch;
+  private readonly options: HttpModelOptions;
+  constructor(options: { model?: string } & HttpModelOptions = {}) { this.model = options.model ?? 'gpt-4o-mini'; this.options = options; this.fetcher = options.fetch ?? globalThis.fetch; }
+  async generate(request: ModelRequest): Promise<ModelResponse> {
+    const apiKey = this.options.apiKey ?? process.env.OPENAI_API_KEY;
+    if (!apiKey && !this.options.baseUrl) throw new Error('OPENAI_API_KEY is required for the OpenAI provider');
+    const response = await this.fetcher(`${this.options.baseUrl ?? 'https://api.openai.com/v1'}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}), ...this.options.headers }, body: JSON.stringify({ model: request.model ?? this.model, messages: request.messages, temperature: request.temperature, max_tokens: request.maxTokens, tools: request.tools?.map((tool) => ({ type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.parameters } })), response_format: request.responseFormat?.type === 'json' ? { type: 'json_object' } : undefined }), signal: request.signal });
+    return parseOpenAI(await parseResponse(response), this.model);
+  }
+}
+
+export class AnthropicModel implements ModelProvider {
+  readonly provider = 'anthropic';
+  readonly model: string;
+  private readonly fetcher: typeof globalThis.fetch;
+  private readonly options: HttpModelOptions;
+  constructor(options: { model?: string } & HttpModelOptions = {}) { this.model = options.model ?? 'claude-3-5-sonnet-latest'; this.options = options; this.fetcher = options.fetch ?? globalThis.fetch; }
+  async generate(request: ModelRequest): Promise<ModelResponse> {
+    const apiKey = this.options.apiKey ?? process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY is required for the Anthropic provider');
+    const system = request.messages.find((message) => message.role === 'system')?.content;
+    const messages = request.messages.filter((message) => message.role !== 'system').map((message) => ({ role: message.role === 'tool' ? 'user' : message.role, content: message.content }));
+    const response = await this.fetcher(`${this.options.baseUrl ?? 'https://api.anthropic.com/v1'}/messages`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', ...this.options.headers }, body: JSON.stringify({ model: request.model ?? this.model, max_tokens: request.maxTokens ?? 1024, system, messages, temperature: request.temperature, tools: request.tools?.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })) }), signal: request.signal });
+    const body = await parseResponse(response) as { id?: string; content?: Array<{ type: string; text?: string; id?: string; name?: string; input?: unknown }>; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number } };
+    const calls = body.content?.filter((item) => item.type === 'tool_use').map((item) => ({ id: item.id ?? id('tool'), name: item.name ?? '', arguments: item.input })) ?? [];
+    return { id: body.id ?? id('anthropic'), content: body.content?.filter((item) => item.type === 'text').map((item) => item.text ?? '').join('') ?? '', toolCalls: calls.length ? calls : undefined, finishReason: calls.length ? 'tool_calls' : 'stop', usage: usage(body.usage?.input_tokens, body.usage?.output_tokens), model: this.model, raw: body };
+  }
+}
+
+export class GeminiModel implements ModelProvider {
+  readonly provider = 'google';
+  readonly model: string;
+  private readonly fetcher: typeof globalThis.fetch;
+  private readonly options: HttpModelOptions;
+  constructor(options: { model?: string } & HttpModelOptions = {}) { this.model = options.model ?? 'gemini-1.5-flash'; this.options = options; this.fetcher = options.fetch ?? globalThis.fetch; }
+  async generate(request: ModelRequest): Promise<ModelResponse> {
+    const key = this.options.apiKey ?? process.env.GOOGLE_API_KEY ?? process.env.GEMINI_API_KEY ?? '';
+    if (!key) throw new Error('GOOGLE_API_KEY or GEMINI_API_KEY is required for the Gemini provider');
+    const endpoint = `${this.options.baseUrl ?? 'https://generativelanguage.googleapis.com/v1beta'}/models/${request.model ?? this.model}:generateContent?key=${encodeURIComponent(key)}`;
+    const contents = request.messages.filter((message) => message.role !== 'system').map((message) => ({ role: message.role === 'assistant' ? 'model' : 'user', parts: [{ text: message.content }] }));
+    const response = await this.fetcher(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', ...this.options.headers }, body: JSON.stringify({ contents, systemInstruction: request.messages.find((message) => message.role === 'system') ? { parts: [{ text: request.messages.find((message) => message.role === 'system')?.content }] } : undefined, generationConfig: { temperature: request.temperature, maxOutputTokens: request.maxTokens } }), signal: request.signal });
+    const body = await parseResponse(response) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string; functionCall?: { name?: string; args?: unknown } }> }; finishReason?: string }>; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } };
+    const parts = body.candidates?.[0]?.content?.parts ?? []; const calls = parts.filter((part) => part.functionCall).map((part) => ({ id: id('gemini-tool'), name: part.functionCall?.name ?? '', arguments: part.functionCall?.args ?? {} }));
+    const content = parts.filter((part) => part.text).map((part) => part.text).join('');
+    return { id: id('gemini'), content, toolCalls: calls.length ? calls : undefined, finishReason: calls.length ? 'tool_calls' : 'stop', usage: usage(body.usageMetadata?.promptTokenCount, body.usageMetadata?.candidatesTokenCount), model: this.model, raw: body };
+  }
+}
+
+export interface CreateModelOptions { provider: 'openai' | 'anthropic' | 'google' | 'gemini' | 'mock' | ModelProvider; model?: string; apiKey?: string; baseUrl?: string; fetch?: typeof globalThis.fetch; responses?: string[]; }
+export function createModel(options: CreateModelOptions): ModelProvider {
+  if (typeof options.provider !== 'string') return options.provider;
+  switch (options.provider) { case 'openai': return new OpenAIModel(options); case 'anthropic': return new AnthropicModel(options); case 'google': case 'gemini': return new GeminiModel(options); case 'mock': return new MockModel(options); default: throw new Error(`Unsupported model provider: ${options.provider}`); }
+}
+
+async function parseResponse(response: Response): Promise<unknown> { const text = await response.text(); let body: unknown; try { body = text ? JSON.parse(text) : {}; } catch { body = { text }; } if (!response.ok) throw new Error(`Model provider request failed (${response.status}): ${asString((body as { error?: unknown }).error ?? text)}`); return body; }
+function parseOpenAI(body: unknown, model: string): ModelResponse { const value = body as { id?: string; choices?: Array<{ message?: { content?: string | null; tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: string } }> }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number } }; const message = value.choices?.[0]?.message; const calls = message?.tool_calls?.map((call) => ({ id: call.id ?? id('tool'), name: call.function?.name ?? '', arguments: parseArgs(call.function?.arguments) })) ?? []; const finish = value.choices?.[0]?.finish_reason; return { id: value.id ?? id('openai'), content: message?.content ?? '', toolCalls: calls.length ? calls : undefined, finishReason: calls.length ? 'tool_calls' : finish === 'length' ? 'length' : 'stop', usage: usage(value.usage?.prompt_tokens, value.usage?.completion_tokens), model, raw: body }; }
+function parseArgs(value?: string): unknown { if (!value) return {}; try { return JSON.parse(value); } catch { return { value }; } }
