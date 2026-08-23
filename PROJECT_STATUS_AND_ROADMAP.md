@@ -664,12 +664,12 @@ The roadmap is ordered by dependency and user value. Later phases must not be us
 Goal: ensure the repository is green before expanding functionality.
 
 - [ ] Run a fresh `pnpm install` from the lockfile.
-- [ ] Run lint, typecheck, tests, and full build.
-- [ ] Fix any failures without disabling checks.
+- [x] Run lint, typecheck, tests, and full build.
+- [x] Fix any failures without disabling checks.
 - [ ] Add missing CLI tests for `init .`, `--cwd`, `doctor`, and local links.
 - [ ] Perform all example smoke tests.
-- [ ] Record exact supported Node and pnpm versions.
-- [ ] Verify no secrets or generated build artifacts are accidentally tracked.
+- [x] Record exact supported Node and pnpm versions.
+- [x] Verify no secrets or generated build artifacts are accidentally tracked.
 
 Exit condition: clean clone plus documented commands produces a passing build.
 
@@ -677,11 +677,11 @@ Exit condition: clean clone plus documented commands produces a passing build.
 
 Goal: a generated local project works without manual repair.
 
-- [ ] Correct all scaffold output to use pnpm.
-- [ ] Generate truthful local-link versus published-package instructions.
-- [ ] Improve missing-entrypoint diagnostics.
+- [x] Correct all scaffold output to use pnpm.
+- [x] Generate truthful local-link versus published-package instructions.
+- [x] Improve missing-entrypoint diagnostics.
 - [ ] Generate `.gitignore` and `.env.example`.
-- [ ] Generate provider-selection examples.
+- [x] Generate provider-selection examples.
 - [ ] Add a working test and typecheck script to generated projects.
 - [ ] Add an integration test that scaffolds, installs, runs, and validates output.
 - [ ] Add `agentforge init .` coverage.
