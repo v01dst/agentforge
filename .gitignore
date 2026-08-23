@@ -10,3 +10,6 @@ coverage/
 !.env.example
 *.log
 .DS_Store
+
+# Stray generated project kept locally, not part of the workspace
+/test/
