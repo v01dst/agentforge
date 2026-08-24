@@ -26,9 +26,9 @@ test('local-link scaffold prints pnpm instructions and file dependencies', async
   try {
     const target = await scaffold('linked-agent', parent, false, join(parent, 'agentforge-repo'));
     const packageJson = JSON.parse(await readFile(join(target, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> };
-    assert.equal(packageJson.dependencies?.['@agentforge/core'], `file:${resolve(parent, 'agentforge-repo', 'packages', 'core')}`);
-    assert.equal(packageJson.dependencies?.['@agentforge/cli'], `file:${resolve(parent, 'agentforge-repo', 'packages', 'cli')}`);
-    assert.equal(packageJson.dependencies?.['@agentforge/models'], `file:${resolve(parent, 'agentforge-repo', 'packages', 'models')}`);
+    assert.equal(packageJson.dependencies?.['@agentforge-oss/core'], `file:${resolve(parent, 'agentforge-repo', 'packages', 'core')}`);
+    assert.equal(packageJson.dependencies?.['agentforge'], `file:${resolve(parent, 'agentforge-repo', 'packages', 'cli')}`);
+    assert.equal(packageJson.dependencies?.['@agentforge-oss/models'], `file:${resolve(parent, 'agentforge-repo', 'packages', 'models')}`);
     const readme = await readFile(join(target, 'README.md'), 'utf8');
     assert.match(readme, /pnpm install/);
     assert.match(readme, /pnpm exec agentforge chat/);
@@ -41,7 +41,7 @@ test('published-mode scaffold keeps registry instructions', async () => {
   try {
     const target = await scaffold('registry-agent', parent);
     const packageJson = JSON.parse(await readFile(join(target, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> };
-    assert.equal(packageJson.dependencies?.['@agentforge/core'], '^0.1.0');
+    assert.equal(packageJson.dependencies?.['@agentforge-oss/core'], '^0.1.0');
     const readme = await readFile(join(target, 'README.md'), 'utf8');
     assert.match(readme, /npm install/);
     assert.match(readme, /npx agentforge chat/);

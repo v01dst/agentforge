@@ -1,5 +1,5 @@
-import type { ModelProvider } from '@agentforge/core';
-import { MockModel, createConfiguredModel, isProviderReady, type ProviderDefinition } from '@agentforge/models';
+import type { ModelProvider } from '@agentforge-oss/core';
+import { MockModel, createConfiguredModel, isProviderReady, type ProviderDefinition } from '@agentforge-oss/models';
 
 export interface ModelSelectionRequest {
   /** Provider protocol: mock (default) | openai | anthropic | google | gemini | openai-compatible */

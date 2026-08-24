@@ -1,4 +1,4 @@
-import { EventBus, AgentForgeError, CancellationError, createRunId } from '@agentforge/core';
+import { EventBus, AgentForgeError, CancellationError, createRunId } from '@agentforge-oss/core';
 import type { WorkflowDefinition, WorkflowEdge, WorkflowNode, WorkflowResult, WorkflowRunOptions, WorkflowState, WorkflowStep } from './types.js';
 
 export class Workflow {
@@ -14,7 +14,7 @@ export class Workflow {
   private startNode(): WorkflowNode { if (this.startId) return this.nodes.get(this.startId)!; const incoming = new Set(this.edges.map((edge) => edge.to)); const node = [...this.nodes.values()].find((candidate) => !incoming.has(candidate.id)); if (!node) throw new Error('Workflow graph has no start node'); return node; }
   private selectEdge(edges: WorkflowEdge[], value: unknown): WorkflowEdge | undefined { if (edges.length <= 1) return edges[0]; const label = typeof value === 'boolean' ? String(value) : typeof value === 'string' ? value : undefined; return edges.find((edge) => edge.label === label) ?? edges.find((edge) => !edge.label) ?? edges[0]; }
   private async executeNode(node: WorkflowNode, state: WorkflowState, runId: string, options: WorkflowRunOptions): Promise<WorkflowStep> { const started = new Date().toISOString(); let attempts = 0; let output: unknown; let lastError: unknown; const retries = node.retries ?? 0; await this.emit('workflow.node.started', runId, { nodeId: node.id, type: node.type }); while (attempts <= retries) { attempts += 1; try { output = await withTimeout(Promise.resolve(node.run(state, { runId, signal: state.signal, events: this.events })), options.timeoutMs, state.signal); const step = { nodeId: node.id, type: node.type, input: state.value, output, startedAt: started, completedAt: new Date().toISOString(), attempts }; await this.emit('workflow.node.completed', runId, { nodeId: node.id, type: node.type, attempts }); return step; } catch (error) { lastError = error; if (attempts > retries) break; } } const error = lastError instanceof Error ? lastError : new Error(String(lastError)); await this.emit('workflow.node.failed', runId, { nodeId: node.id, error: error.message, attempts }); throw error; }
-  private async emit(type: import('@agentforge/core').AgentEventType, runId: string, data: Record<string, unknown>) { await this.events.emit({ type, runId, data, timestamp: new Date().toISOString() }); }
+  private async emit(type: import('@agentforge-oss/core').AgentEventType, runId: string, data: Record<string, unknown>) { await this.events.emit({ type, runId, data, timestamp: new Date().toISOString() }); }
 }
 
 export class WorkflowBuilder {

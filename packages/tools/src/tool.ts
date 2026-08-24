@@ -1,4 +1,4 @@
-import type { ToolContext, ToolLike } from '@agentforge/core';
+import type { ToolContext, ToolLike } from '@agentforge-oss/core';
 import { z } from 'zod';
 
 export interface ToolDefinition<TInput, TOutput> {

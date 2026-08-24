@@ -1,10 +1,10 @@
 import { join } from 'node:path';
 import { NextResponse } from 'next/server';
-import { Agent, EventBus } from '@agentforge/core';
-import { MemoryEventStore, EventStoreSink, estimateCost } from '@agentforge/observability';
-import { InMemoryRunStore, JsonlRunStore, RunRecord, RunStore, RunStoreEventSink } from '@agentforge/storage';
-import { createMockWebSearchTool } from '@agentforge/tools';
-import { WorkflowBuilder, agentNode, inputNode, outputNode, toolNode, transformNode } from '@agentforge/workflows';
+import { Agent, EventBus } from '@agentforge-oss/core';
+import { MemoryEventStore, EventStoreSink, estimateCost } from '@agentforge-oss/observability';
+import { InMemoryRunStore, JsonlRunStore, RunRecord, RunStore, RunStoreEventSink } from '@agentforge-oss/storage';
+import { createMockWebSearchTool } from '@agentforge-oss/tools';
+import { WorkflowBuilder, agentNode, inputNode, outputNode, toolNode, transformNode } from '@agentforge-oss/workflows';
 import { resolveRequestedModel, type ModelSelectionRequest } from '../../../lib/providers';
 
 type RunRequest = ModelSelectionRequest & {

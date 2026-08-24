@@ -1,5 +1,5 @@
-import { Agent, type AgentConfig } from '@agentforge/core';
-export * from '@agentforge/core';
+import { Agent, type AgentConfig } from '@agentforge-oss/core';
+export * from '@agentforge-oss/core';
 
 /** Small factory kept in a separate package for applications that only need agents. */
 export function createAgent(config: AgentConfig): Agent { return new Agent(config); }

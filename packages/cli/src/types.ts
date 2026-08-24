@@ -4,7 +4,7 @@ export interface NamedEntry {
   [key: string]: unknown;
 }
 
-/** Provider selection understood by the `@agentforge/models` adapters. */
+/** Provider selection understood by the `@agentforge-oss/models` adapters. */
 export interface ModelSelection {
   provider: 'openai' | 'anthropic' | 'google' | 'gemini' | 'mock' | string;
   model?: string;

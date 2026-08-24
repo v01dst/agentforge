@@ -1,5 +1,5 @@
 {
-  "name": "@agentforge/core",
+  "name": "@agentforge-oss/core",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",

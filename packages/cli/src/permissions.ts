@@ -1,6 +1,6 @@
 import { relative, resolve, isAbsolute } from 'node:path';
 
-/** Structural view of a core ToolLike; the CLI intentionally does not depend on @agentforge/core. */
+/** Structural view of a core ToolLike; the CLI intentionally does not depend on @agentforge-oss/core. */
 interface PolicyTool {
   readonly name: string;
   readonly description: string;

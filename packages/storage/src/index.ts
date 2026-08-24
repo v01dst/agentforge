@@ -1,6 +1,6 @@
 import { appendFile, readFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { AgentEvent, EventSink } from '@agentforge/core';
+import type { AgentEvent, EventSink } from '@agentforge-oss/core';
 
 export interface RunRecord { id: string; agentId?: string; workflowId?: string; status: 'running' | 'completed' | 'failed' | 'cancelled'; input?: unknown; output?: unknown; error?: string; startedAt: string; completedAt?: string; metadata?: Record<string, unknown>; }
 export interface MessageRecord { runId: string; role: string; content: string; createdAt: string; toolCallId?: string; }

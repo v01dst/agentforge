@@ -1,5 +1,5 @@
 {
-  "name": "@agentforge/examples",
+  "name": "@agentforge-oss/examples",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -16,11 +16,11 @@
     "memory": "tsx custom-memory-provider.ts"
   },
   "dependencies": {
-    "@agentforge/core": "workspace:*",
-    "@agentforge/memory": "workspace:*",
-    "@agentforge/models": "workspace:*",
-    "@agentforge/tools": "workspace:*",
-    "@agentforge/workflows": "workspace:*",
+    "@agentforge-oss/core": "workspace:*",
+    "@agentforge-oss/memory": "workspace:*",
+    "@agentforge-oss/models": "workspace:*",
+    "@agentforge-oss/tools": "workspace:*",
+    "@agentforge-oss/workflows": "workspace:*",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "zod": "^3.24.1"

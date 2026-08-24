@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CancellationError } from '@agentforge/core';
+import { CancellationError } from '@agentforge-oss/core';
 import { WorkflowBuilder, conditionNode, customNode, inputNode, outputNode, parallelNode, transformNode } from '../src/index.js';
 
 describe('Workflow', () => {

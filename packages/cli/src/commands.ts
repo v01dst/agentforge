@@ -458,7 +458,7 @@ export async function devCommand(flags: Record<string, string | boolean>): Promi
   let command: string | readonly string[] | undefined = config.dev?.command;
   if (!command) {
     command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-    const args = ['--filter', '@agentforge/playground', 'dev'];
+    const args = ['--filter', '@agentforge-oss/playground', 'dev'];
     info('Starting the AgentForge playground...');
     return await spawnAndForward(command, args, config.dev?.env);
   }
@@ -506,7 +506,7 @@ export async function connectCommand(provider: string | undefined, flags: Record
   if (!name) throw new Error('Missing provider. Usage: agentforge connect <provider> (openai, anthropic, google, or custom).');
   const envName = name === 'openai' ? 'OPENAI_API_KEY' : name === 'anthropic' ? 'ANTHROPIC_API_KEY' : name === 'google' || name === 'gemini' ? 'GOOGLE_API_KEY' : undefined;
   process.env.AGENTFORGE_PROVIDER = name;
-  process.env.AGENTFORGE_PROVIDER_MODULE = flagString(flags, 'module') ?? (envName ? '@agentforge/models' : name);
+  process.env.AGENTFORGE_PROVIDER_MODULE = flagString(flags, 'module') ?? (envName ? '@agentforge-oss/models' : name);
   if (!envName) {
     success(`Custom provider module selected for this session: ${process.env.AGENTFORGE_PROVIDER_MODULE}`);
     hint('The module may export default/model, createProvider(options), or createModel(options).');

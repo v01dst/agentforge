@@ -1,5 +1,5 @@
 {
-  "name": "@agentforge/memory",
+  "name": "@agentforge-oss/memory",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",

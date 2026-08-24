@@ -1,4 +1,4 @@
-import { Agent, type ModelProvider } from '@agentforge/core';
+import { Agent, type ModelProvider } from '@agentforge-oss/core';
 
 export class LocalEchoProvider implements ModelProvider {
   readonly provider = 'local-echo';

@@ -1,5 +1,5 @@
-import { createMockWebSearchTool } from '@agentforge/tools';
-import { WorkflowBuilder, inputNode, outputNode, toolNode, transformNode } from '@agentforge/workflows';
+import { createMockWebSearchTool } from '@agentforge-oss/tools';
+import { WorkflowBuilder, inputNode, outputNode, toolNode, transformNode } from '@agentforge-oss/workflows';
 
 const search = createMockWebSearchTool({
   'agent runtimes': [

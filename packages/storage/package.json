@@ -1,5 +1,5 @@
 {
-  "name": "@agentforge/storage",
+  "name": "@agentforge-oss/storage",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
@@ -17,7 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@agentforge/core": "workspace:*"
+    "@agentforge-oss/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

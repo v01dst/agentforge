@@ -21,10 +21,10 @@ test('scaffold creates a complete pnpm-based local-link project', async () => {
       dependencies?: Record<string, string>;
       pnpm?: { overrides?: Record<string, string> };
     };
-    assert.equal(packageJson.dependencies?.['@agentforge/core'], 'file:/opt/agentforge/packages/core');
-    assert.equal(packageJson.dependencies?.['@agentforge/cli'], 'file:/opt/agentforge/packages/cli');
-    assert.equal(packageJson.dependencies?.['@agentforge/models'], 'file:/opt/agentforge/packages/models');
-    assert.equal(packageJson.pnpm?.overrides?.['@agentforge/core'], 'file:/opt/agentforge/packages/core');
+    assert.equal(packageJson.dependencies?.['@agentforge-oss/core'], 'file:/opt/agentforge/packages/core');
+    assert.equal(packageJson.dependencies?.['agentforge'], 'file:/opt/agentforge/packages/cli');
+    assert.equal(packageJson.dependencies?.['@agentforge-oss/models'], 'file:/opt/agentforge/packages/models');
+    assert.equal(packageJson.pnpm?.overrides?.['@agentforge-oss/core'], 'file:/opt/agentforge/packages/core');
     for (const script of ['chat', 'run', 'typecheck', 'test']) assert.ok(packageJson.scripts?.[script], `script ${script} exists`);
     const readme = await readFile(join(target, 'README.md'), 'utf8');
     assert.match(readme, /^\s*pnpm install$/m);

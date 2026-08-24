@@ -1,5 +1,5 @@
 {
-  "name": "@agentforge/sdk",
+  "name": "@agentforge-oss/sdk",
   "version": "0.1.0",
   "description": "Convenience SDK facade for AgentForge runtime packages.",
   "license": "Apache-2.0",
@@ -19,14 +19,14 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@agentforge/agents": "workspace:*",
-    "@agentforge/core": "workspace:*",
-    "@agentforge/memory": "workspace:*",
-    "@agentforge/models": "workspace:*",
-    "@agentforge/observability": "workspace:*",
-    "@agentforge/storage": "workspace:*",
-    "@agentforge/tools": "workspace:*",
-    "@agentforge/workflows": "workspace:*"
+    "@agentforge-oss/agents": "workspace:*",
+    "@agentforge-oss/core": "workspace:*",
+    "@agentforge-oss/memory": "workspace:*",
+    "@agentforge-oss/models": "workspace:*",
+    "@agentforge-oss/observability": "workspace:*",
+    "@agentforge-oss/storage": "workspace:*",
+    "@agentforge-oss/tools": "workspace:*",
+    "@agentforge-oss/workflows": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

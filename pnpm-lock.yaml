@@ -25,22 +25,22 @@ importers:
 
   apps/playground:
     dependencies:
-      '@agentforge/core':
+      '@agentforge-oss/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@agentforge/models':
+      '@agentforge-oss/models':
         specifier: workspace:*
         version: link:../../packages/models
-      '@agentforge/observability':
+      '@agentforge-oss/observability':
         specifier: workspace:*
         version: link:../../packages/observability
-      '@agentforge/storage':
+      '@agentforge-oss/storage':
         specifier: workspace:*
         version: link:../../packages/storage
-      '@agentforge/tools':
+      '@agentforge-oss/tools':
         specifier: workspace:*
         version: link:../../packages/tools
-      '@agentforge/workflows':
+      '@agentforge-oss/workflows':
         specifier: workspace:*
         version: link:../../packages/workflows
       lucide-react:
@@ -80,19 +80,19 @@ importers:
 
   examples/showcase:
     dependencies:
-      '@agentforge/core':
+      '@agentforge-oss/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@agentforge/memory':
+      '@agentforge-oss/memory':
         specifier: workspace:*
         version: link:../../packages/memory
-      '@agentforge/models':
+      '@agentforge-oss/models':
         specifier: workspace:*
         version: link:../../packages/models
-      '@agentforge/tools':
+      '@agentforge-oss/tools':
         specifier: workspace:*
         version: link:../../packages/tools
-      '@agentforge/workflows':
+      '@agentforge-oss/workflows':
         specifier: workspace:*
         version: link:../../packages/workflows
       tsx:
@@ -107,10 +107,10 @@ importers:
 
   packages/agents:
     dependencies:
-      '@agentforge/core':
+      '@agentforge-oss/core':
         specifier: workspace:*
         version: link:../core
-      '@agentforge/tools':
+      '@agentforge-oss/tools':
         specifier: workspace:*
         version: link:../tools
     devDependencies:
@@ -123,7 +123,7 @@ importers:
 
   packages/cli:
     dependencies:
-      '@agentforge/tools':
+      '@agentforge-oss/tools':
         specifier: workspace:*
         version: link:../tools
       ink:
@@ -176,7 +176,7 @@ importers:
 
   packages/models:
     dependencies:
-      '@agentforge/core':
+      '@agentforge-oss/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -189,7 +189,7 @@ importers:
 
   packages/observability:
     dependencies:
-      '@agentforge/core':
+      '@agentforge-oss/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -202,28 +202,28 @@ importers:
 
   packages/sdk:
     dependencies:
-      '@agentforge/agents':
+      '@agentforge-oss/agents':
         specifier: workspace:*
         version: link:../agents
-      '@agentforge/core':
+      '@agentforge-oss/core':
         specifier: workspace:*
         version: link:../core
-      '@agentforge/memory':
+      '@agentforge-oss/memory':
         specifier: workspace:*
         version: link:../memory
-      '@agentforge/models':
+      '@agentforge-oss/models':
         specifier: workspace:*
         version: link:../models
-      '@agentforge/observability':
+      '@agentforge-oss/observability':
         specifier: workspace:*
         version: link:../observability
-      '@agentforge/storage':
+      '@agentforge-oss/storage':
         specifier: workspace:*
         version: link:../storage
-      '@agentforge/tools':
+      '@agentforge-oss/tools':
         specifier: workspace:*
         version: link:../tools
-      '@agentforge/workflows':
+      '@agentforge-oss/workflows':
         specifier: workspace:*
         version: link:../workflows
     devDependencies:
@@ -236,7 +236,7 @@ importers:
 
   packages/storage:
     dependencies:
-      '@agentforge/core':
+      '@agentforge-oss/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -252,7 +252,7 @@ importers:
 
   packages/tools:
     dependencies:
-      '@agentforge/core':
+      '@agentforge-oss/core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -271,10 +271,10 @@ importers:
 
   packages/workflows:
     dependencies:
-      '@agentforge/core':
+      '@agentforge-oss/core':
         specifier: workspace:*
         version: link:../core
-      '@agentforge/tools':
+      '@agentforge-oss/tools':
         specifier: workspace:*
         version: link:../tools
     devDependencies:

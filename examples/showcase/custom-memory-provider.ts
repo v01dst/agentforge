@@ -1,4 +1,4 @@
-import { InMemoryMemoryProvider, type MemoryProvider, type RecallQuery, type RememberInput } from '@agentforge/memory';
+import { InMemoryMemoryProvider, type MemoryProvider, type RecallQuery, type RememberInput } from '@agentforge-oss/memory';
 
 export class AuditedMemoryProvider implements MemoryProvider {
   private readonly inner = new InMemoryMemoryProvider();

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import test from 'node:test';
-import type { ToolContext } from '@agentforge/core';
+import type { ToolContext } from '@agentforge-oss/core';
 import { createApplyPatchTool, createGitDiffTool } from '../src/editing.js';
 
 const runFile = promisify(execFile);

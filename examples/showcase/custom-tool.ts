@@ -1,6 +1,6 @@
-import { Agent } from '@agentforge/core';
-import { MockModel } from '@agentforge/models';
-import { defineTool } from '@agentforge/tools';
+import { Agent } from '@agentforge-oss/core';
+import { MockModel } from '@agentforge-oss/models';
+import { defineTool } from '@agentforge-oss/tools';
 import { z } from 'zod';
 
 const inventory = defineTool({

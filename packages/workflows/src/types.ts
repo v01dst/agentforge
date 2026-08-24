@@ -1,4 +1,4 @@
-import type { Agent, AgentEvent, EventBus, Message, ModelProvider, ToolLike } from '@agentforge/core';
+import type { Agent, AgentEvent, EventBus, Message, ModelProvider, ToolLike } from '@agentforge-oss/core';
 
 export type WorkflowNodeType = 'input' | 'agent' | 'model' | 'tool' | 'condition' | 'parallel' | 'transform' | 'approval' | 'output' | 'custom';
 export interface WorkflowState<T = unknown> { input: unknown; value: T; data: Record<string, unknown>; history: WorkflowStep[]; runId: string; signal: AbortSignal; }

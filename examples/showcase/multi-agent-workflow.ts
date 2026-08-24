@@ -1,6 +1,6 @@
-import { Agent } from '@agentforge/core';
-import { MockModel } from '@agentforge/models';
-import { WorkflowBuilder, agentNode, inputNode, outputNode } from '@agentforge/workflows';
+import { Agent } from '@agentforge-oss/core';
+import { MockModel } from '@agentforge-oss/models';
+import { WorkflowBuilder, agentNode, inputNode, outputNode } from '@agentforge-oss/workflows';
 
 const researcher = new Agent({ name: 'researcher', model: new MockModel({ responses: ['Typed tools reduce invalid calls.'] }) });
 const editor = new Agent({ name: 'editor', model: new MockModel({ responses: ['Summary: typed tools make agent execution more reliable.'] }) });

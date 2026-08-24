@@ -1,5 +1,5 @@
-import { Agent } from '@agentforge/core';
-import { MockModel } from '@agentforge/models';
+import { Agent } from '@agentforge-oss/core';
+import { MockModel } from '@agentforge-oss/models';
 
 export const agent = new Agent({
   name: 'concierge',

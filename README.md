@@ -8,13 +8,13 @@ The project keeps provider-specific code behind adapters, treats tools as typed 
 
 ```bash
 # Install the CLI globally
-npm install -g @agentforge/cli
+npm install -g agentforge
 agentforge init my-agent
 cd my-agent
 agentforge chat
 ```
 
-> **Note:** until the first npm publish, installing from the registry won't work. Clone this repo and use local-link mode instead, e.g. `git clone https://github.com/v01dst/agentforge && cd agentforge && pnpm install && pnpm build && cd packages/cli && npm link`. The `@agentforge/cli` package provides the `agentforge` binary (an unscoped `agentforge` npm alias may also be published later).
+> **Note:** until the first npm publish, installing from the registry won't work. Clone this repo and use local-link mode instead, e.g. `git clone https://github.com/v01dst/agentforge && cd agentforge && pnpm install && pnpm build && cd packages/cli && npm link`. The `agentforge` package provides the `agentforge` binary.
 
 ## Status
 
@@ -38,14 +38,14 @@ graph TD
 
 The monorepo is split into small packages:
 
-- `@agentforge/core`: agent runtime, events, and public types
-- `@agentforge/models`: provider adapters and deterministic mock models
-- `@agentforge/tools`: typed tool definitions and built-in tools
-- `@agentforge/workflows`: graph execution and workflow nodes
-- `@agentforge/memory`: conversation and long-term memory providers
-- `@agentforge/observability`: structured logs and event sinks
-- `@agentforge/storage`: execution-history persistence
-- `@agentforge/cli`: the `agentforge` developer CLI
+- `@agentforge-oss/core`: agent runtime, events, and public types
+- `@agentforge-oss/models`: provider adapters and deterministic mock models
+- `@agentforge-oss/tools`: typed tool definitions and built-in tools
+- `@agentforge-oss/workflows`: graph execution and workflow nodes
+- `@agentforge-oss/memory`: conversation and long-term memory providers
+- `@agentforge-oss/observability`: structured logs and event sinks
+- `@agentforge-oss/storage`: execution-history persistence
+- `agentforge`: the `agentforge` developer CLI
 
 ## Quick start
 
@@ -53,13 +53,13 @@ The monorepo is split into small packages:
 pnpm install
 pnpm build
 pnpm test
-pnpm --filter @agentforge/cli dev -- --help
+pnpm --filter agentforge dev -- --help
 ```
 
 Install the CLI globally, create a project, install its dependencies, and launch the interactive agent:
 
 ```bash
-npm install -g @agentforge/cli
+npm install -g agentforge
 agentforge init my-agent
 cd my-agent
 npm install
@@ -79,8 +79,8 @@ export GOOGLE_API_KEY=...
 ## Basic agent
 
 ```ts
-import { Agent } from '@agentforge/core';
-import { MockModel } from '@agentforge/models';
+import { Agent } from '@agentforge-oss/core';
+import { MockModel } from '@agentforge-oss/models';
 
 const agent = new Agent({
   name: 'assistant',
@@ -95,7 +95,7 @@ console.log(result.output);
 ## Typed tools
 
 ```ts
-import { defineTool } from '@agentforge/tools';
+import { defineTool } from '@agentforge-oss/tools';
 import { z } from 'zod';
 
 const calculator = defineTool({

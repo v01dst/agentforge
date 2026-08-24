@@ -1,5 +1,5 @@
-import type { AgentEvent, EventSink, Logger } from '@agentforge/core';
-export * from '@agentforge/core';
+import type { AgentEvent, EventSink, Logger } from '@agentforge-oss/core';
+export * from '@agentforge-oss/core';
 
 export interface EventStore { append(event: AgentEvent): void | Promise<void>; list(runId?: string): AgentEvent[] | Promise<AgentEvent[]>; }
 export class MemoryEventStore implements EventStore {

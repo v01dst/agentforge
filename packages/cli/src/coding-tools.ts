@@ -2,15 +2,15 @@ import {
   createListFilesTool,
   createReadFileTool,
   createSearchTextTool,
-} from '@agentforge/tools';
+} from '@agentforge-oss/tools';
 import {
   createApplyPatchTool,
   createGitDiffTool,
-} from '@agentforge/tools';
+} from '@agentforge-oss/tools';
 import {
   createRunCommandTool,
   createRunTestsTool,
-} from '@agentforge/tools';
+} from '@agentforge-oss/tools';
 import {
   applyWorkspacePolicy,
   currentPermissionMode,

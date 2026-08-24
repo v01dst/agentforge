@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { applyWorkspacePolicy, MODE_ALLOWED_PERMISSIONS } from '../src/permissions.js';
 
 // Build a minimal zod-like schema shim instead of importing zod (not a direct
-// dependency of @agentforge/cli); only `parse` behavior is needed by the policy.
+// dependency of @agentforge-oss/cli); only `parse` behavior is needed by the policy.
 type PathSchema = { parse(value: unknown): { path?: string } };
 const schemaLike: PathSchema = {
   parse(value: unknown) { return (value ?? {}) as { path?: string }; },

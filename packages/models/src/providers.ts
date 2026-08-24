@@ -1,4 +1,4 @@
-import type { Message, ModelChunk, ModelProvider, ModelRequest, ModelResponse, ToolCall, TokenUsage } from '@agentforge/core';
+import type { Message, ModelChunk, ModelProvider, ModelRequest, ModelResponse, ToolCall, TokenUsage } from '@agentforge-oss/core';
 
 export interface HttpModelOptions { apiKey?: string; baseUrl?: string; fetch?: typeof globalThis.fetch; headers?: Record<string, string>; }
 

@@ -1,5 +1,5 @@
 {
-  "name": "@agentforge/tools",
+  "name": "@agentforge-oss/tools",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
@@ -17,7 +17,7 @@
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "@agentforge/core": "workspace:*",
+    "@agentforge-oss/core": "workspace:*",
     "zod": "^3.24.1"
   },
   "devDependencies": {
