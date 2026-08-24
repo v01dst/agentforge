@@ -22,7 +22,7 @@ test('scaffold creates a complete pnpm-based local-link project', async () => {
       pnpm?: { overrides?: Record<string, string> };
     };
     assert.equal(packageJson.dependencies?.['@agentforge-oss/core'], 'file:/opt/agentforge/packages/core');
-    assert.equal(packageJson.dependencies?.['agentforge'], 'file:/opt/agentforge/packages/cli');
+    assert.equal(packageJson.dependencies?.['@agentforge-oss/cli'], 'file:/opt/agentforge/packages/cli');
     assert.equal(packageJson.dependencies?.['@agentforge-oss/models'], 'file:/opt/agentforge/packages/models');
     assert.equal(packageJson.pnpm?.overrides?.['@agentforge-oss/core'], 'file:/opt/agentforge/packages/core');
     for (const script of ['chat', 'run', 'typecheck', 'test']) assert.ok(packageJson.scripts?.[script], `script ${script} exists`);

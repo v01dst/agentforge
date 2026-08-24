@@ -8,13 +8,13 @@ The project keeps provider-specific code behind adapters, treats tools as typed 
 
 ```bash
 # Install the CLI globally
-npm install -g agentforge
+npm install -g @agentforge-oss/cli
 agentforge init my-agent
 cd my-agent
 agentforge chat
 ```
 
-> **Note:** until the first npm publish, installing from the registry won't work. Clone this repo and use local-link mode instead, e.g. `git clone https://github.com/v01dst/agentforge && cd agentforge && pnpm install && pnpm build && cd packages/cli && npm link`. The `agentforge` package provides the `agentforge` binary.
+> **Note:** the npm package is `@agentforge-oss/cli` (the `agentforge` name on npm is blocked by similarity rules). Installing it globally still provides the `agentforge` binary.
 
 ## Status
 
@@ -59,7 +59,7 @@ pnpm --filter agentforge dev -- --help
 Install the CLI globally, create a project, install its dependencies, and launch the interactive agent:
 
 ```bash
-npm install -g agentforge
+npm install -g @agentforge-oss/cli
 agentforge init my-agent
 cd my-agent
 npm install

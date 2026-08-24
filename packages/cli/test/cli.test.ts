@@ -27,7 +27,7 @@ test('local-link scaffold prints pnpm instructions and file dependencies', async
     const target = await scaffold('linked-agent', parent, false, join(parent, 'agentforge-repo'));
     const packageJson = JSON.parse(await readFile(join(target, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> };
     assert.equal(packageJson.dependencies?.['@agentforge-oss/core'], `file:${resolve(parent, 'agentforge-repo', 'packages', 'core')}`);
-    assert.equal(packageJson.dependencies?.['agentforge'], `file:${resolve(parent, 'agentforge-repo', 'packages', 'cli')}`);
+    assert.equal(packageJson.dependencies?.['@agentforge-oss/cli'], `file:${resolve(parent, 'agentforge-repo', 'packages', 'cli')}`);
     assert.equal(packageJson.dependencies?.['@agentforge-oss/models'], `file:${resolve(parent, 'agentforge-repo', 'packages', 'models')}`);
     const readme = await readFile(join(target, 'README.md'), 'utf8');
     assert.match(readme, /pnpm install/);

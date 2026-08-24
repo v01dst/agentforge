@@ -8,7 +8,7 @@ const files: Record<string, string> = {
   "packageManager": "pnpm@9.15.5",
   "type": "module",
   "scripts": { "run": "agentforge run src/agent.ts", "chat": "agentforge chat src/agent.ts", "start": "agentforge", "typecheck": "tsc --noEmit", "test": "tsx --test test/*.test.ts" },
-  "dependencies": { "agentforge": "^0.1.0", "@agentforge-oss/core": "^0.1.0", "@agentforge-oss/models": "^0.1.0" },
+  "dependencies": { "@agentforge-oss/cli": "^0.1.0", "@agentforge-oss/core": "^0.1.0", "@agentforge-oss/models": "^0.1.0" },
   "devDependencies": { "@types/node": "^22.10.2", "tsx": "^4.19.2", "typescript": "^5.7.2" }
 }
 `,
@@ -288,7 +288,7 @@ export async function scaffold(name: string, cwd = process.cwd(), force = false,
     const overrides: Record<string, string> = {};
     for (const packageName of ['core', 'cli', 'models']) {
       const spec = `file:${resolve(localRoot, 'packages', packageName)}`;
-      const depName = packageName === 'cli' ? 'agentforge' : `@agentforge-oss/${packageName}`;
+      const depName = `@agentforge-oss/${packageName}`;
       packageJson.dependencies = { ...(packageJson.dependencies ?? {}) };
       packageJson.dependencies[depName] = spec;
       overrides[depName] = spec;
