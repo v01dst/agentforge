@@ -18,7 +18,7 @@ agentforge chat
 
 ## Status
 
-Version `0.1.0` is an early release. Core APIs are usable for local development and testing; provider adapters, persistence, and the playground are evolving and may change before `1.0.0`.
+Version `0.2.0` adds the chat-first interactive TUI (`agentforge` launches straight into it) on top of the 0.1.0 runtime. Core APIs are usable for local development and testing; provider adapters, persistence, and the playground are evolving and may change before `1.0.0`.
 
 ## Architecture
 
