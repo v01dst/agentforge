@@ -866,6 +866,17 @@ Goal: installation no longer depends on this repository’s absolute path.
 
 Status (2026-08-24): repository is public at https://github.com/v01dst/agentforge; CI runs lint/typecheck/test/build on every push; release workflow published v0.1.0 of all 10 packages to npm. Future releases: bump versions, tag `vX.Y.Z`, push — CI publishes automatically.
 
+### Milestone E: Interactive App Shell — landed (2026-08-24)
+
+- [x] Dashboard home screen: project/provider/tool/workflow/run status with per-section contextual loading states and quick-action menu.
+- [x] Command palette (Ctrl+K) with type-to-filter over all major actions.
+- [x] New-project wizard (name → link mode → confirm → scaffold with live step timeline).
+- [x] Guided run screen: entrypoint selection, streaming output, token/duration footer, cancel via Esc/Ctrl-C.
+- [x] Models & Providers manager: readiness badges, endpoint add/delete with confirmation, secrets never rendered.
+- [x] Settings screen: provider/model/permission-mode applied to the live session.
+- [x] Help overlay mapping UI shortcuts to CLI equivalents; contextual animated loading states throughout.
+- [x] Bare `agentforge` launches the shell on TTYs; `AGENTFORGE_HEADLESS=1`, `TERM=dumb`, and non-TTY invocations fall back to the classic CLI so scripts and CI are unaffected.
+
 Exit condition: a new user can install AgentForge from the registry and complete the quick start without cloning the monorepo.
 
 ### Phase 12: Production Hardening
