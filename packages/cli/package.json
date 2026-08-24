@@ -15,7 +15,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "templates"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/bin.ts",
@@ -23,7 +25,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test test/*.test.ts test/*.test.tsx"
   },
-  "dependencies": { "@agentforge/tools": "workspace:*",
+  "dependencies": {
+    "@agentforge/tools": "workspace:*",
     "ink": "^5.2.0",
     "react": "^18.3.1",
     "tsx": "^4.19.2"
@@ -33,5 +36,21 @@
     "ink-testing-library": "^4.0.0",
     "@types/node": "^22.10.2",
     "typescript": "^5.7.2"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/v01dst/agentforge.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/v01dst/agentforge#readme",
+  "bugs": {
+    "url": "https://github.com/v01dst/agentforge/issues"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "author": "v01dst"
 }

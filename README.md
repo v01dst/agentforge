@@ -4,6 +4,18 @@ AgentForge is an open-source, model-agnostic TypeScript framework for building, 
 
 The project keeps provider-specific code behind adapters, treats tools as typed capabilities, and exposes the same runtime to the SDK, CLI, and playground.
 
+## Install
+
+```bash
+# Install the CLI globally
+npm install -g @agentforge/cli
+agentforge init my-agent
+cd my-agent
+agentforge chat
+```
+
+> **Note:** until the first npm publish, installing from the registry won't work. Clone this repo and use local-link mode instead, e.g. `git clone https://github.com/v01dst/agentforge && cd agentforge && pnpm install && pnpm build && cd packages/cli && npm link`. The `@agentforge/cli` package provides the `agentforge` binary (an unscoped `agentforge` npm alias may also be published later).
+
 ## Status
 
 Version `0.1.0` is an early release. Core APIs are usable for local development and testing; provider adapters, persistence, and the playground are evolving and may change before `1.0.0`.
