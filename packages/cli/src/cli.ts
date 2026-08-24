@@ -31,6 +31,10 @@ export async function execute(argv: string[] = process.argv.slice(2)): Promise<n
   if (parsed.flags.help) { info(HELP); return 0; }
   if (parsed.flags.version) { info(VERSION); return 0; }
   if (!parsed.command) {
+    // Bare `agentforge`: interactive shell on TTYs (dashboard), chat when a
+    // project is configured, plain help otherwise. Headless/CI unaffected.
+    const { launchInteractiveShell } = await import('./interactive.js');
+    if (await launchInteractiveShell()) return 0;
     const { loadConfig } = await import('./config.js');
     const { config } = await loadConfig({ required: false });
     if (config.entry) return await chatCommand(undefined, parsed.flags);
