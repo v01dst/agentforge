@@ -855,8 +855,8 @@ Goal: installation no longer depends on this repository’s absolute path.
 
 - [x] Finalize public package boundaries and exports.
 - [x] Add release automation (`.github/workflows/release.yml`: tag `v*` → build, test, publish all packages via `NPM_AUTH_TOKEN` secret).
-- [x] Resolve npm naming: the public `@agentforge` scope is owned by a third party on the registry, so packages publish as unscoped `agentforge` (CLI) plus `@agentforge-oss/*` (internal packages). The unscoped `agentforge` name was verified free.
-- [x] Publish to the npm registry under tag `v0.1.0`.
+- [x] Resolve npm naming: the public `@agentforge` scope is owned by a third party and the unscoped `agentforge` name is similarity-blocked, so all packages publish under the `@agentforge-oss/*` scope. The CLI installs globally as `npm i -g @agentforge-oss/cli` and still provides the `agentforge` binary.
+- [x] Publish v0.1.0 to the npm registry (2026-08-24): CLI + 9 internal packages verified live.
 - [ ] Verify `pnpm dlx`, `npx`, and package installation behavior on clean machines.
 - [ ] Add semantic-release or Changesets-based versioning.
 - [ ] Publish migration notes for experimental API changes.
@@ -864,7 +864,7 @@ Goal: installation no longer depends on this repository’s absolute path.
 - [ ] Test on Linux, macOS, and Windows.
 - [x] Document supported Node versions (`engines.node >= 20.11` in every package).
 
-Status (2026-08-24): repository is public at https://github.com/v01dst/agentforge; CI runs lint/typecheck/test/build on every push; release workflow is wired end to end with the npm token stored as a repository secret.
+Status (2026-08-24): repository is public at https://github.com/v01dst/agentforge; CI runs lint/typecheck/test/build on every push; release workflow published v0.1.0 of all 10 packages to npm. Future releases: bump versions, tag `vX.Y.Z`, push — CI publishes automatically.
 
 Exit condition: a new user can install AgentForge from the registry and complete the quick start without cloning the monorepo.
 
