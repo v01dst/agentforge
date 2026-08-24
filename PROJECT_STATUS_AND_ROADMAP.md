@@ -877,6 +877,16 @@ Status (2026-08-24): repository is public at https://github.com/v01dst/agentforg
 - [x] Help overlay mapping UI shortcuts to CLI equivalents; contextual animated loading states throughout.
 - [x] Bare `agentforge` launches the shell on TTYs; `AGENTFORGE_HEADLESS=1`, `TERM=dumb`, and non-TTY invocations fall back to the classic CLI so scripts and CI are unaffected.
 
+### Milestone F: Chat-first TUI — landed (2026-08-24)
+
+- [x] `agentforge` with zero arguments launches a persistent chat TUI immediately (project configured or not).
+- [x] Persistent bottom input box, scrolling conversation, status bar (provider · model · permission mode · tokens · last-turn time).
+- [x] Inline slash-command palette above the input filtering as you type (`/m` → /models /model); arrow navigation, Enter select, Esc dismiss.
+- [x] 22 slash commands: help, connect, providers, models, model, tools, skills, agents, workflows, runs, inspect, test, doctor, config, settings, clear, status, init, new, project, chat, exit — routed to interactive screens (Tools/Skills/Workflows/Runs/Agents browsers, Models manager, Settings, New-project wizard) or suspended real CLI commands.
+- [x] Main loop stays alive after every command; screens return to the conversation on Esc.
+- [x] Streaming responses from the real agent runtime; no simulated progress.
+- [x] Headless compatibility preserved: non-TTY, `AGENTFORGE_HEADLESS=1`, `TERM=dumb` fall back to classic CLI; all explicit commands unchanged.
+
 Exit condition: a new user can install AgentForge from the registry and complete the quick start without cloning the monorepo.
 
 ### Phase 12: Production Hardening
