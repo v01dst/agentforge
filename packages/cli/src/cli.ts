@@ -1,5 +1,5 @@
 import { formatError, error, info } from './output.js';
-import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, runCommand, testCommand } from './commands.js';
+import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, modelsCommand, providersCommand, runCommand, testCommand } from './commands.js';
 import type { ParsedCli } from './types.js';
 
 export function parseArgs(argv: string[]): ParsedCli {
@@ -41,9 +41,14 @@ export async function execute(argv: string[] = process.argv.slice(2)): Promise<n
     case 'dev': return await devCommand(parsed.flags);
     case 'run': return await runCommand(parsed.args[0], parsed.flags);
     case 'chat': return await chatCommand(parsed.args[0], parsed.flags);
+    case 'models': {
+      const sub = parsed.args[0];
+      if (sub && !['list', 'ls', 'l'].includes(sub)) throw new Error(`Unknown models subcommand: ${sub}. Usage: agentforge models list.`);
+      return await modelsCommand(parsed.flags);
+    }
     case 'test': return await testCommand(parsed.args);
     case 'inspect': return await inspectCommand(parsed.args[0], parsed.flags);
-    case 'providers': return await listCommand('providers', parsed.flags);
+    case 'providers': return await providersCommand(parsed.args, parsed.flags);
     case 'tools': return await listCommand('tools', parsed.flags);
     case 'workflows': return await listCommand('workflows', parsed.flags);
     case 'doctor': return await doctorCommand(parsed.flags);

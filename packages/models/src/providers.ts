@@ -72,10 +72,103 @@ export class GeminiModel implements ModelProvider {
   }
 }
 
-export interface CreateModelOptions { provider: 'openai' | 'anthropic' | 'google' | 'gemini' | 'mock' | ModelProvider; model?: string; apiKey?: string; baseUrl?: string; fetch?: typeof globalThis.fetch; responses?: string[]; }
+export interface CreateModelOptions { provider: 'openai' | 'anthropic' | 'google' | 'gemini' | 'mock' | 'openai-compatible' | 'custom' | ModelProvider; model?: string; apiKey?: string; baseUrl?: string; fetch?: typeof globalThis.fetch; responses?: string[]; }
 export function createModel(options: CreateModelOptions): ModelProvider {
   if (typeof options.provider !== 'string') return options.provider;
-  switch (options.provider) { case 'openai': return new OpenAIModel(options); case 'anthropic': return new AnthropicModel(options); case 'google': case 'gemini': return new GeminiModel(options); case 'mock': return new MockModel(options); default: throw new Error(`Unsupported model provider: ${options.provider}`); }
+  switch (options.provider) {
+    case 'openai': return new OpenAIModel(options);
+    case 'anthropic': return new AnthropicModel(options);
+    case 'google': case 'gemini': return new GeminiModel(options);
+    case 'mock': return new MockModel(options);
+    case 'openai-compatible':
+    case 'custom': {
+      if (!options.baseUrl) throw new Error("The 'openai-compatible' provider requires a baseUrl (for example https://openrouter.ai/api/v1).");
+      return new OpenAIModel(options);
+    }
+    default: throw new Error(`Unsupported model provider: ${options.provider as string}`);
+  }
+}
+
+/** Wire protocol a custom/proxy endpoint speaks. */
+export type ProviderProtocol = 'openai' | 'anthropic' | 'google' | 'gemini' | 'openai-compatible';
+
+/**
+ * A named, configurable model endpoint. API keys are resolved from the
+ * environment (`apiKeyEnv`); secrets must never be stored in config files.
+ */
+export interface ProviderDefinition {
+  name?: string;
+  protocol: ProviderProtocol;
+  /** Default model id for this endpoint, e.g. `gpt-4o-mini`. */
+  model?: string;
+  /** Endpoint root, e.g. `https://openrouter.ai/api/v1`. Required for openai-compatible. */
+  baseUrl?: string;
+  /** Environment variable that holds the API key. Optional for local endpoints. */
+  apiKeyEnv?: string;
+  /** Explicit key override; intended for tests and in-memory use only. */
+  apiKey?: string;
+  headers?: Record<string, string>;
+  /** Injectable transport, primarily for tests. */
+  fetch?: typeof globalThis.fetch;
+}
+
+const PROTOCOL_DEFAULT_KEY_ENVS: Record<ProviderProtocol, readonly string[]> = {
+  openai: ['OPENAI_API_KEY'],
+  anthropic: ['ANTHROPIC_API_KEY'],
+  google: ['GOOGLE_API_KEY', 'GEMINI_API_KEY'],
+  gemini: ['GOOGLE_API_KEY', 'GEMINI_API_KEY'],
+  'openai-compatible': [],
+};
+
+function label(definition: ProviderDefinition): string {
+  return definition.name ? `provider '${definition.name}'` : `provider ${definition.protocol}`;
+}
+
+/** Environment variables consulted for this definition's credential. */
+export function requiredKeyEnvs(definition: ProviderDefinition): readonly string[] {
+  return definition.apiKeyEnv ? [definition.apiKeyEnv] : PROTOCOL_DEFAULT_KEY_ENVS[definition.protocol];
+}
+
+/** Resolve the API key for a definition: explicit option first, then env vars. */
+export function resolveApiKey(definition: ProviderDefinition, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  if (definition.apiKey) return definition.apiKey;
+  for (const name of requiredKeyEnvs(definition)) {
+    const value = env[name];
+    if (value) return value;
+  }
+  return undefined;
+}
+
+/** Whether a definition has everything it needs to send a request. */
+export function isProviderReady(definition: ProviderDefinition, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (definition.protocol === 'openai-compatible') {
+    if (!definition.baseUrl) return false;
+    return !definition.apiKeyEnv || Boolean(env[definition.apiKeyEnv]);
+  }
+  if (definition.baseUrl && definition.apiKey) return true;
+  return resolveApiKey(definition, env) !== undefined;
+}
+
+/** Build a ModelProvider from a named definition using environment credentials. */
+export function createConfiguredModel(definition: ProviderDefinition, env: NodeJS.ProcessEnv = process.env): ModelProvider {
+  const who = label(definition);
+  const options = {
+    model: definition.model,
+    baseUrl: definition.baseUrl,
+    headers: definition.headers,
+    apiKey: resolveApiKey(definition, env),
+    fetch: definition.fetch,
+  };
+  switch (definition.protocol) {
+    case 'openai': return new OpenAIModel(options);
+    case 'anthropic': return new AnthropicModel(options);
+    case 'google': case 'gemini': return new GeminiModel(options);
+    case 'openai-compatible': {
+      if (!definition.baseUrl) throw new Error(`${who}: protocol 'openai-compatible' requires a baseUrl (for example https://openrouter.ai/api/v1).`);
+      return new OpenAIModel(options);
+    }
+    default: throw new Error(`${who}: unsupported protocol ${(definition as { protocol?: string }).protocol ?? 'unknown'}`);
+  }
 }
 
 async function parseResponse(response: Response): Promise<unknown> { const text = await response.text(); let body: unknown; try { body = text ? JSON.parse(text) : {}; } catch { body = { text }; } if (!response.ok) throw new Error(`Model provider request failed (${response.status}): ${asString((body as { error?: unknown }).error ?? text)}`); return body; }

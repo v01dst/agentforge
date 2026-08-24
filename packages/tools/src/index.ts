@@ -4,3 +4,6 @@ export * from './http.js';
 export * from './filesystem.js';
 export * from './shell.js';
 export * from './json.js';
+export * from './editing.js';
+export * from './command-execution.js';
+export * from './repository.js';

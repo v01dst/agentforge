@@ -7,10 +7,30 @@ const files: Record<string, string> = {
   "private": true,
   "packageManager": "pnpm@9.15.5",
   "type": "module",
-  "scripts": { "run": "agentforge run src/agent.ts", "chat": "agentforge chat src/agent.ts", "start": "agentforge" },
+  "scripts": { "run": "agentforge run src/agent.ts", "chat": "agentforge chat src/agent.ts", "start": "agentforge", "typecheck": "tsc --noEmit", "test": "tsx --test test/*.test.ts" },
   "dependencies": { "@agentforge/core": "^0.1.0", "@agentforge/cli": "^0.1.0", "@agentforge/models": "^0.1.0" },
-  "devDependencies": { "tsx": "^4.19.2", "typescript": "^5.7.2" }
+  "devDependencies": { "@types/node": "^22.10.2", "tsx": "^4.19.2", "typescript": "^5.7.2" }
 }
+`,
+  '.gitignore': `node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+.agentforge/runs/
+`,
+  '.env.example': `# Provider credentials. Copy to .env (never commit .env).
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+GOOGLE_API_KEY=
+
+# Custom provider module (path or package). See provider.example.mjs.
+AGENTFORGE_PROVIDER_MODULE=
+# Optional overrides.
+AGENTFORGE_PROVIDER=
+AGENTFORGE_MODEL=
+AGENTFORGE_BASE_URL=
 `,
   'agentforge.config.ts': `import type { AgentForgeConfig } from '@agentforge/cli';
 
@@ -27,9 +47,14 @@ const config: AgentForgeConfig = {
 
 export default config;
 `,
-  'src/agent.ts': `import { resolve } from 'node:path';
+  'src/agent.ts': `import { readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { Agent, type ModelProvider, type ModelResponse } from '@agentforge/core';
+import { Agent, type Message, type ModelProvider, type ModelResponse } from '@agentforge/core';
+import { createModel } from '@agentforge/models';
+
+const agentName = '{{name}}';
+const instructions = 'Be concise and factual.';
 
 const mockModel: ModelProvider = {
   provider: 'mock',
@@ -38,23 +63,133 @@ const mockModel: ModelProvider = {
     const input = request.messages.at(-1)?.content ?? '';
     return { id: 'mock-response', content: 'AgentForge received: ' + input, finishReason: 'stop', model: 'agentforge-local', usage: { inputTokens: input.length, outputTokens: input.length, totalTokens: input.length * 2 } };
   },
+  async *stream(request) {
+    const response = await this.generate(request);
+    for (const word of response.content.split(/(\\s+)/)) yield { id: response.id, delta: word };
+    yield { id: response.id, delta: '', done: true, usage: response.usage };
+  },
 };
 
+interface ManagedProvider {
+  name: string;
+  protocol?: string;
+  model?: string;
+  baseUrl?: string;
+  apiKeyEnv?: string;
+}
+
+async function readManagedProviders(): Promise<ManagedProvider[]> {
+  try {
+    const parsed = JSON.parse(await readFile(join(resolve(process.cwd()), '.agentforge', 'providers.json'), 'utf8')) as { providers?: ManagedProvider[] };
+    return Array.isArray(parsed.providers) ? parsed.providers : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Resolution order: AGENTFORGE_PROVIDER_MODULE > managed endpoints > builtin providers > mock. */
 async function loadModel(): Promise<ModelProvider> {
   const moduleName = process.env.AGENTFORGE_PROVIDER_MODULE;
-  if (!moduleName) return mockModel;
-  const specifier = moduleName.startsWith('.') || moduleName.startsWith('/') ? pathToFileURL(resolve(process.cwd(), moduleName)).href : moduleName;
-  const loaded = await import(specifier) as Record<string, unknown>;
-  const options = { provider: process.env.AGENTFORGE_PROVIDER ?? 'custom', model: process.env.AGENTFORGE_MODEL, baseUrl: process.env.AGENTFORGE_BASE_URL };
-  const factory = typeof loaded.createProvider === 'function' ? loaded.createProvider : typeof loaded.createModel === 'function' ? loaded.createModel : undefined;
-  const candidate = factory ? await (factory as (options: typeof options) => unknown)(options) : loaded.model ?? loaded.default;
-  if (!candidate || typeof candidate !== 'object' || typeof (candidate as { generate?: unknown }).generate !== 'function') throw new Error('Custom provider must export a ModelProvider as default/model, createProvider(options), or createModel(options).');
-  return candidate as ModelProvider;
+  if (moduleName) {
+    const specifier = moduleName.startsWith('.') || moduleName.startsWith('/') ? pathToFileURL(resolve(process.cwd(), moduleName)).href : moduleName;
+    const loaded = await import(specifier) as Record<string, unknown>;
+    const options = { provider: process.env.AGENTFORGE_PROVIDER ?? 'custom', model: process.env.AGENTFORGE_MODEL, baseUrl: process.env.AGENTFORGE_BASE_URL };
+    type FactoryOptions = typeof options;
+    const factory = (typeof loaded.createProvider === 'function' ? loaded.createProvider : typeof loaded.createModel === 'function' ? loaded.createModel : undefined) as ((options: FactoryOptions) => unknown) | undefined;
+    const candidate = factory ? await factory(options) : loaded.model ?? loaded.default;
+    if (!candidate || typeof candidate !== 'object' || typeof (candidate as { generate?: unknown }).generate !== 'function') throw new Error('Custom provider must export a ModelProvider as default/model, createProvider(options), or createModel(options).');
+    return candidate as ModelProvider;
+  }
+  const wanted = process.env.AGENTFORGE_PROVIDER ?? '';
+  if (!wanted || wanted === 'mock') return mockModel;
+  const managed = (await readManagedProviders()).find((entry) => entry.name === wanted);
+  if (managed) {
+    return createModel({
+      provider: (managed.protocol && managed.protocol !== 'mock' ? managed.protocol : 'openai-compatible') as 'openai' | 'anthropic' | 'google' | 'gemini' | 'openai-compatible',
+      model: process.env.AGENTFORGE_MODEL || managed.model,
+      baseUrl: managed.baseUrl,
+      apiKey: managed.apiKeyEnv ? process.env[managed.apiKeyEnv] : undefined,
+    });
+  }
+  const known = ['mock', 'openai', 'anthropic', 'google', 'gemini', 'openai-compatible'];
+  throw new Error('Unknown provider "' + wanted + '". Add an endpoint with "agentforge providers add ' + wanted + ' ..." (see README), or use one of: ' + known.join(', ') + '.');
+}
+
+interface ChatTurn {
+  text: string;
+  runId?: string;
+  usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+  durationMs: number;
+  meta: Record<string, unknown>;
+  /** Present when the model supports streaming; drain it to receive deltas. */
+  stream?: AsyncIterable<string>;
+}
+
+export interface AgentForgeSession {
+  reset(): void;
+  send(input: string, options?: { signal?: AbortSignal }): Promise<ChatTurn>;
+}
+
+/** Stateful multi-turn session consumed by \`agentforge chat\`. */
+export function createSession(): AgentForgeSession {
+  const messages: Message[] = [];
+  return {
+    reset(): void {
+      messages.length = 0;
+    },
+    async send(input: string, options?: { signal?: AbortSignal }): Promise<ChatTurn> {
+      const requestSignal = options?.signal;
+      const model = await loadModel();
+      if (!messages.length) messages.push({ role: 'system', content: instructions });
+      messages.push({ role: 'user', content: input });
+      const started = Date.now();
+      const request = { messages: [...messages], signal: requestSignal };
+      const turn: ChatTurn = { text: '', durationMs: 0, meta: {} };
+      const finish = (): void => {
+        turn.durationMs = Date.now() - started;
+        turn.meta = { provider: model.provider, model: model.model ?? '' };
+      };
+      if (!model.stream) {
+        try {
+          const response = await model.generate(request);
+          turn.text = response.content;
+          turn.usage = response.usage;
+          turn.runId = response.id;
+          messages.push({ role: 'assistant', content: response.content });
+        } finally {
+          finish();
+        }
+        return turn;
+      }
+      const streamFn = model.stream;
+      async function* pump(): AsyncGenerator<string> {
+        try {
+          for await (const chunk of streamFn.call(model, request)) {
+            if (typeof chunk.delta === 'string' && chunk.delta) {
+              turn.text += chunk.delta;
+              yield chunk.delta;
+            }
+            if (chunk.usage) turn.usage = chunk.usage;
+          }
+        } finally {
+          messages.push({ role: 'assistant', content: turn.text });
+          finish();
+        }
+      }
+      turn.stream = pump();
+      return turn;
+    },
+  };
+}
+
+/** Build the project agent. Used by one-shot runs and headless tests. */
+export async function createAgent(): Promise<Agent> {
+  const model = await loadModel();
+  return new Agent({ name: agentName, model, instructions });
 }
 
 export async function run(input = 'Hello from AgentForge'): Promise<unknown> {
-  const model = await loadModel();
-  return new Agent({ name: '{{name}}', model, instructions: 'Be concise and factual.' }).run(input);
+  return (await createAgent()).run(input);
 }
 `,
   'provider.example.mjs': `export default {
@@ -71,6 +206,31 @@ export async function run(input = 'Hello from AgentForge'): Promise<unknown> {
   "include": ["src/**/*.ts", "agentforge.config.ts"]
 }
 `,
+  'test/agent.test.ts': `import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { createSession, run } from '../src/agent.js';
+
+test('agent responds through the configured model', async () => {
+  const result = await run('ping') as { output?: unknown };
+  assert.ok(JSON.stringify(result).includes('ping'));
+});
+
+test('session preserves context across turns', async () => {
+  const session = createSession();
+  async function collect(turn: Awaited<ReturnType<typeof createSession>['send']>): Promise<string> {
+    let text = '';
+    if (turn.stream) for await (const delta of turn.stream) text += delta;
+    return text || turn.text;
+  }
+  const firstText = await collect(await session.send('hello'));
+  assert.ok(firstText.length > 0, 'first turn produced text');
+  const second = await session.send('again');
+  const secondText = await collect(second);
+  assert.ok(secondText.length > 0, 'second turn produced text');
+  assert.ok((second.usage?.totalTokens ?? 0) > 0, 'second turn reports token usage');
+  assert.equal((second.meta as { provider?: string }).provider, 'mock');
+});
+`,
   'README.md': `# {{name}}
 
 Generated by AgentForge. Install dependencies, then start an interactive session:
@@ -80,7 +240,7 @@ Generated by AgentForge. Install dependencies, then start an interactive session
 {{start}}
 \`\`\`
 {{install_note}}
-The generated agent uses a deterministic local model so it runs without paid API credentials. Custom providers may export a ModelProvider as \`default\` or \`model\`, or export \`createProvider(options)\` / \`createModel(options)\`. Select one with \`/connect ./provider.mjs\` or \`AGENTFORGE_PROVIDER_MODULE=./provider.mjs\`. Start it with \`{{install}}\` followed by \`{{runner}}\`. For OpenAI, Anthropic, or Gemini, install \`@agentforge/models\`, then replace the model in \`src/agent.ts\` with \`createModel({ provider: 'openai' })\` and set the provider environment variable.
+The generated agent uses a deterministic local model so it runs without paid API credentials. Custom providers may export a ModelProvider as \`default\` or \`model\`, or export \`createProvider(options)\` / \`createModel(options)\`. Select one with \`/connect ./provider.mjs\` or \`AGENTFORGE_PROVIDER_MODULE=./provider.mjs\`. Start it with \`{{install}}\` followed by \`{{runner}}\`. For OpenAI, Anthropic, or Gemini, set \`AGENTFORGE_PROVIDER_MODULE=@agentforge/models\`, choose \`AGENTFORGE_PROVIDER\` and \`AGENTFORGE_MODEL\`, and provide the matching API key (see \`.env.example\`); the models package ships adapters for all three.
 `,
 };
 
@@ -121,10 +281,20 @@ export async function scaffold(name: string, cwd = process.cwd(), force = false,
   }
   if (localRoot) {
     const packagePath = join(target, 'package.json');
-    const packageJson = JSON.parse(await readFile(packagePath, 'utf8')) as { dependencies?: Record<string, string> };
-    packageJson.dependencies = { ...(packageJson.dependencies ?? {}) };
-    for (const packageName of ['core', 'cli']) packageJson.dependencies[`@agentforge/${packageName}`] = `file:${resolve(localRoot, 'packages', packageName)}`;
-    delete packageJson.dependencies['@agentforge/models'];
+    const packageJson = JSON.parse(await readFile(packagePath, 'utf8')) as {
+      dependencies?: Record<string, string>;
+      pnpm?: { overrides?: Record<string, string> };
+    };
+    const overrides: Record<string, string> = {};
+    for (const packageName of ['core', 'cli', 'models']) {
+      const spec = `file:${resolve(localRoot, 'packages', packageName)}`;
+      packageJson.dependencies = { ...(packageJson.dependencies ?? {}) };
+      packageJson.dependencies[`@agentforge/${packageName}`] = spec;
+      overrides[`@agentforge/${packageName}`] = spec;
+    }
+    // Overrides also rewrite intra-monorepo specs (`workspace:*`) inside the
+    // linked packages, which bare `file:` dependencies cannot resolve.
+    packageJson.pnpm = { ...(packageJson.pnpm ?? {}), overrides };
     await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
   }
   return target;

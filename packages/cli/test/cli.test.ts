@@ -28,7 +28,7 @@ test('local-link scaffold prints pnpm instructions and file dependencies', async
     const packageJson = JSON.parse(await readFile(join(target, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> };
     assert.equal(packageJson.dependencies?.['@agentforge/core'], `file:${resolve(parent, 'agentforge-repo', 'packages', 'core')}`);
     assert.equal(packageJson.dependencies?.['@agentforge/cli'], `file:${resolve(parent, 'agentforge-repo', 'packages', 'cli')}`);
-    assert.equal(packageJson.dependencies?.['@agentforge/models'], undefined);
+    assert.equal(packageJson.dependencies?.['@agentforge/models'], `file:${resolve(parent, 'agentforge-repo', 'packages', 'models')}`);
     const readme = await readFile(join(target, 'README.md'), 'utf8');
     assert.match(readme, /pnpm install/);
     assert.match(readme, /pnpm exec agentforge chat/);
@@ -46,6 +46,18 @@ test('published-mode scaffold keeps registry instructions', async () => {
     assert.match(readme, /npm install/);
     assert.match(readme, /npx agentforge chat/);
     assert.doesNotMatch(readme, /pnpm install/);
+  } finally { await rm(parent, { recursive: true, force: true }); }
+});
+
+test('scaffold accepts "." and derives the project name from the directory', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'agentforge-initdot-'));
+  try {
+    const target = await scaffold('.', parent);
+    assert.equal(target, resolve(parent));
+    const packageJson = JSON.parse(await readFile(join(target, 'package.json'), 'utf8')) as { name?: string };
+    const expected = parent.split(/[\\/]/).pop() as string;
+    assert.equal(packageJson.name, expected);
+    assert.ok(expected.length >= 1 && /^[a-zA-Z]/.test(expected), `derived name must be valid: ${expected}`);
   } finally { await rm(parent, { recursive: true, force: true }); }
 });
 

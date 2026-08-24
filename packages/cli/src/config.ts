@@ -2,7 +2,8 @@ import { access, readdir } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { AgentForgeConfig } from './types.js';
+import type { AgentForgeConfig, NamedEntry } from './types.js';
+import { readProviderEntries } from './providers-store.js';
 
 const CONFIG_NAMES = [
   'agentforge.config.ts',
@@ -44,16 +45,40 @@ async function importConfig(path: string): Promise<Record<string, unknown>> {
   }
 }
 
+/** Merge CLI-managed sidecar providers into config providers; config names win on collision. */
+export function mergeProviderEntries(config: AgentForgeConfig, sidecar: readonly NamedEntry[]): AgentForgeConfig {
+  if (!sidecar.length) return config;
+  const configured = new Set((config.providers ?? []).map((entry) => typeof entry === 'string' ? entry : entry.name));
+  const additions = sidecar.filter((entry) => !configured.has(entry.name));
+  if (!additions.length) return config;
+  return { ...config, providers: [...(config.providers ?? []), ...additions] };
+}
+
+async function readSidecarProviders(cwd: string): Promise<NamedEntry[]> {
+  const entries = await readProviderEntries(cwd);
+  return entries.map((entry) => ({ name: entry.name, protocol: entry.protocol, model: entry.model, baseUrl: entry.baseUrl, apiKeyEnv: entry.apiKeyEnv }));
+}
+
 export async function loadConfig(options: { cwd?: string; required?: boolean } = {}): Promise<{ path?: string; config: AgentForgeConfig }> {
-  const path = await findConfigFile(options.cwd);
+  const cwd = options.cwd ?? process.cwd();
+  const path = await findConfigFile(cwd);
+  let loadedConfig: AgentForgeConfig;
   if (!path) {
     if (options.required) throw new Error('No agentforge.config.ts found. Run `agentforge init <name>` or pass an explicit entrypoint.');
-    return { config: {} };
+    loadedConfig = {};
+  } else {
+    const loaded = await importConfig(path);
+    const candidate = (loaded.default ?? loaded.config ?? loaded) as AgentForgeConfig;
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) throw new Error(`Invalid AgentForge config in ${path}`);
+    loadedConfig = candidate;
   }
-  const loaded = await importConfig(path);
-  const config = (loaded.default ?? loaded.config ?? loaded) as AgentForgeConfig;
-  if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error(`Invalid AgentForge config in ${path}`);
-  return { path, config };
+  let sidecar: NamedEntry[] = [];
+  try {
+    sidecar = await readSidecarProviders(cwd);
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)} (found while loading model providers)`);
+  }
+  return { path, config: mergeProviderEntries(loadedConfig, sidecar) };
 }
 
 export async function discoverEntries(cwd = process.cwd()): Promise<string[]> {

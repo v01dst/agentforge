@@ -1,6 +1,6 @@
 # AgentForge: Project Status, Product Definition, and Roadmap
 
-Last updated: 2026-08-23  
+Last updated: 2026-08-24  
 Current version: `0.1.0`  
 Repository status: active development / experimental
 
@@ -122,7 +122,7 @@ Provider-specific code should remain isolated inside the models package. The cor
 | `@agentforge/core` | Agent loop, shared types, errors, event bus, run IDs | Functional |
 | `@agentforge/agents` | Agent factory and registry | Functional, intentionally small |
 | `@agentforge/models` | OpenAI, Anthropic, Gemini, and mock model adapters | Functional baseline; streaming/tool parity incomplete |
-| `@agentforge/tools` | Typed tools, validation, permissions, safety controls | Functional baseline |
+| `@agentforge/tools` | Typed tools, validation, permissions, safety controls | Functional baseline + repository coding tools (list/read/search/patch/git-diff/run) |
 | `@agentforge/workflows` | Graph execution, branching, parallel work, retries | Functional baseline |
 | `@agentforge/memory` | In-memory and PostgreSQL-oriented memory | Functional baseline; vector retrieval not implemented |
 | `@agentforge/observability` | Structured events, console/storage sinks, redaction | Functional baseline |
@@ -169,7 +169,7 @@ Implemented provider adapters include:
 - Tool-call parsing for supported provider response formats.
 - API keys obtained from options or environment variables rather than source code.
 
-Current limitations include inconsistent feature parity between providers, incomplete streaming, and incomplete normalization of complex multimodal/provider-specific content.
+Current limitations include inconsistent feature parity between providers, incomplete streaming, and incomplete normalization of complex multimodal/provider-specific content. Custom and proxy endpoints are now first-class: an `openai-compatible` provider kind plus `createConfiguredModel()` let every protocol target a custom `baseUrl` with environment-based credentials (see CHANGELOG).
 
 ### 6.3 Tool System
 
@@ -292,7 +292,17 @@ Current CLI features include:
 - Local monorepo package linking for unpublished development packages.
 - Run inspection through configured storage or local run files.
 
-The current CLI does **not** yet provide the complete interactive terminal-agent experience described later in this document.
+Interactive capabilities added since the initial baseline:
+
+- `agentforge chat` renders an Ink-based terminal UI on TTYs and a plain readline mode otherwise (also via `--plain`). Projects can export `createSession()` for real multi-turn context; one-shot entrypoints fall back to transcript replay.
+- Plain-mode chat supports streaming deltas, per-turn run/provider/model/duration/token footers, multiline input with a trailing `\`, per-turn Ctrl-C cancellation, double Ctrl-C exit, and piped non-interactive scripting.
+- Slash commands in plain mode: `/help`, `/status`, `/providers`, `/tools`, `/workflows`, `/models`, `/model <name>`, `/connect <provider>`, `/clear`, `/exit`.
+- `agentforge models list` reports built-in and project-configured providers, credential readiness, default models, and current session selection; `--json` is supported.
+- Entrypoint-not-found errors include the resolved absolute path, discovered config path, and `--cwd`/`doctor` guidance.
+- Scaffolding generates `.gitignore`, `.env.example`, working `test` and `typecheck` scripts, `@types/node`, a streaming mock model, and a multi-turn session test. Local-link scaffolds emit `pnpm.overrides` so generated projects install cleanly despite unpublished packages; this was verified end to end offline (scaffold → install → typecheck → tests → two-turn mock chat).
+- Managed custom endpoints: `agentforge providers add/remove/list` maintain `.agentforge/providers.json`; entries merge into project config at load time and are resolved by scaffolded projects when `AGENTFORGE_PROVIDER` names them.
+
+Still missing on the interactive path: durable named sessions and resume, repository-aware coding tools, approval prompts, provider streaming/conformance work, and full replacement of seeded playground data.
 
 ### 6.9 Playground
 
@@ -303,8 +313,11 @@ The playground includes:
 - Workflow-oriented interface concepts.
 - Sections for dashboards, workflows, agents, runs, tools, models, and settings.
 - A real API route capable of invoking AgentForge runtime/workflow packages.
+- Provider-aware execution: POST bodies select `provider`/`model`/`baseUrl`/`apiKeyEnv`; requests resolve against server-side environment credentials only (raw keys are never accepted over HTTP), and missing configuration returns a 400 naming the required variable.
+- File-backed run history via `JsonlRunStore` plus a `GET /api/runs` endpoint; the UI loads persisted history on mount.
+- Settings fields for custom OpenAI-compatible endpoints; unimplemented sidebar controls are disabled and labeled.
 
-The important limitation is that several dashboard metrics, lists, and controls are still seeded or visual-only. The playground must not be advertised as fully storage-backed until these are replaced.
+The remaining limitation is that some interface concepts beyond the agent console remain visual-only (workflow authoring, environment inspection), and mock-provider cost figures use placeholder rates. The playground must not be advertised as a complete visual workflow platform until those are replaced.
 
 ### 6.10 Examples and Open-Source Setup
 
@@ -340,9 +353,7 @@ Using a mock provider is acceptable for testing. Presenting mock responses as re
 
 ### 7.2 Seeded Playground Data
 
-Some playground dashboards and lists currently display seeded data. They demonstrate the intended interface but do not all come from persisted AgentForge runs.
-
-The playground execution API is real, but the complete UI is not yet wired end to end.
+Earlier revisions displayed seeded dashboard data. The current playground console starts from an honest empty state, loads real persisted runs from the JSONL store, and disables controls without backends. Mock-provider cost figures still use placeholder rates rather than a provider cost table.
 
 ### 7.3 Unpublished Packages
 
@@ -358,7 +369,7 @@ Local repository linking is the current development path.
 
 ### 7.4 One-Shot CLI
 
-`agentforge run` currently invokes an entrypoint once. It is suitable for scripts and basic automation, but it is not an interactive coding-agent shell.
+`agentforge run` invokes an entrypoint once and remains intentionally headless for scripts and CI. `agentforge chat` now provides an interactive session experience, but durable named sessions, resume, and repository-aware coding behavior described below are still missing, so the CLI is not yet a full coding-agent shell.
 
 ### 7.5 Missing Coding-Agent Capabilities
 
@@ -487,16 +498,16 @@ The most recent reported verification before this document was created was:
 
 | Check | Last known result |
 | --- | --- |
-| `pnpm lint` | Passed across 34 tasks (2026-08-23) |
-| `pnpm typecheck` | Passed across 34 tasks (2026-08-23) |
-| `pnpm test` | Passed across 20 tasks on a forced (non-cached) run (2026-08-23) |
-| `CI=1 pnpm build` | Passed across 13 packages after fixing a playground type error and unused import (2026-08-23) |
+| `turbo run typecheck --concurrency=1` | Passed across 21 tasks (2026-08-23) |
+| `turbo run lint --concurrency=1` | Passed across 21 tasks (2026-08-23) |
+| `turbo run test --concurrency=1` | Passed across 21 tasks; includes CLI (31 tests across suites), models fetch fixtures (8), and playground route/model-selection suites (12, with a live stub-proxy round trip) (2026-08-23) |
+| `CI=1 pnpm build` (full parallel) | Not rerun on the constrained development device after the final edits. `@agentforge/cli` and `@agentforge/models` dists rebuilt and load-verified; playground verified via dev compile, tsc, and vitest. Rerun the full gate on a desktop before release. |
 | Six showcase examples | Previously smoke-tested successfully; rerun pending |
-| Built CLI help | Working |
-| Generated project scaffold | Files and local dependency links verified (2026-08-23) |
-| Clean generated-project dependency install | Verified with pnpm: `init --local-root`, `pnpm install`, `doctor`, and a mock agent run completed using only documented commands (2026-08-23) |
+| Built CLI help | Working, includes `chat`, `models list`, and `providers add/remove/list` |
+| Generated project scaffold | Files, local dependency links, offline install, typecheck, generated tests all verified (2026-08-23) |
+| Custom proxy endpoint end to end | Verified: managed endpoint added via CLI, chat and one-shot runs forwarded to a local OpenAI-compatible stub with correct path, bearer token from env var name, and model id (2026-08-23) |
 
-These results are historical status, not a claim that the current checkout has passed a fresh final quality gate. A fresh run is required after the CLI work is completed.
+These results reflect the current checkout. They are point-in-time status, not a standing guarantee; rerun gates after further changes. On RAM-constrained proot/Termux environments run turbo serially (`--concurrency=1`) to avoid out-of-memory crashes.
 
 ### 10.1 Required Final Quality Gate
 
@@ -562,7 +573,7 @@ Planned correction:
 - Define a provider conformance test suite.
 - Test every adapter with recorded or mocked HTTP fixtures.
 - Normalize retryable errors and rate-limit metadata.
-- Add OpenAI-compatible local endpoint support as an explicit adapter/configuration mode.
+- Add OpenAI-compatible local endpoint support as an explicit adapter/configuration mode. (Done: `openai-compatible` kind, managed endpoints, playground support; recorded-fetch conformance fixtures cover base-URL routing, auth, and model id for every protocol. Full streaming/tool-call conformance parity remains open.)
 
 ### 11.4 Playground Data Integrity
 
@@ -887,29 +898,37 @@ The immediate priority is not adding more decorative UI. The correct order is:
 
 ## 15. Proposed Near-Term Work Plan
 
-### Milestone A: CLI Can Be Trusted
+### Milestone A: CLI Can Be Trusted — largely complete (2026-08-23)
 
-- Fix scaffold instructions.
-- Verify local-link scaffolding.
-- Improve entrypoint errors.
-- Add CLI integration tests.
-- Run the complete repository quality gate.
+- [x] Fix scaffold instructions (pnpm in local-link mode, honest registry-mode warning).
+- [x] Verify local-link scaffolding end to end, including offline install via `pnpm.overrides`.
+- [x] Improve entrypoint errors (resolved path, config path, `--cwd` guidance).
+- [x] Add CLI integration tests (scaffold, entrypoint diagnostics, session contract, streaming runner).
+- [x] Run the complete repository quality gate (51 turbo tasks green).
 
-### Milestone B: CLI Feels Like an Agent Product
+Remaining follow-ups: example smoke-test rerun and a generated-project integration test wired into CI.
 
-- Implement interactive chat.
-- Add streaming and cancellation.
-- Add persistent conversation context.
-- Add provider selection.
-- Add run/status output.
+### Milestone B: CLI Feels Like an Agent Product — core experience landed (2026-08-23)
 
-### Milestone C: CLI Can Work on Code Safely
+- [x] Implement interactive chat (`agentforge chat`, Ink UI on TTYs, plain mode otherwise; bare command enters chat when a project is configured).
+- [x] Add streaming and cancellation (deltas, per-turn Ctrl-C cancel, double Ctrl-C exit).
+- [x] Add persistent conversation context (`createSession()` contract with real message history; transcript fallback for one-shot modules).
+- [x] Add provider selection (`AGENTFORGE_PROVIDER`/`AGENTFORGE_MODEL`, `/model`, `connect`, `models list`).
+- [x] Add run/status output (per-turn footers, `doctor`, slash-command status).
 
-- Add repository search/read tools.
-- Add reviewed patch editing.
-- Add restricted shell/test execution.
-- Add approval prompts and permission modes.
-- Add Git diff summaries.
+Still open for B-quality polish: durable named sessions/resume (Phase 6), provider streaming conformance (Phase 3), repository tools (Phase 4).
+
+### Milestone C: CLI Can Work on Code Safely — tool layer landed (2026-08-24)
+
+- [x] Add repository search/read tools (`list_files`, `read_file`, `search_text` in `packages/tools/src/repository.ts`; gitignore-aware, workspace-scoped, bounded reads).
+- [x] Add reviewed patch editing (`apply_patch` with dry-run validation and diff output; `inspect_git_diff` for status/diff; `packages/tools/src/editing.ts`).
+- [x] Add restricted shell/test execution (`run_command` allowlist + metacharacter/blocklist rejection; `run_tests` with package.json discovery; `packages/tools/src/command-execution.ts`).
+- [x] Add permission modes and approval policy (`packages/cli/src/permissions.ts`: read-only / ask / workspace-write / trusted, `/mode` slash command, approval-prompt hook, path-escape denial; default mode is `ask`).
+- [x] Add coding-toolset factory wiring all seven tools through the policy (`packages/cli/src/coding-tools.ts`).
+- [ ] Wire the toolset into chat sessions end to end (agent loop tool registration + TTY approval UI).
+- [ ] Add Git-aware diff summaries surfaced in chat turns.
+
+Remaining Phase 4 follow-ups: token-aware context selection, `.gitignore`-driven exclusion config surface, adversarial security tests for the new tools.
 
 ### Milestone D: UI Represents Reality
 

@@ -8,34 +8,54 @@ import { pathToFileURL } from 'node:url';
 import { loadConfig } from './config.js';
 import { error, formatError, heading, hint, info, printJson, success, warn } from './output.js';
 import { scaffold } from './project.js';
-import type { AgentForgeConfig, NamedEntry, RunnableModule } from './types.js';
+import { readExtensions } from './extensions/store.js';
+import { listSkills, skillBodies } from './skills/skills.js';
+import { buildTurnRunner, resolveRunnable } from './ui/turn.js';
+import { buildModelReport, createSessionFromModule, drainStream, formatTurnFooter, isCancelLike } from './session.js';
+import { addProviderEntry, readProviderEntries, removeProviderEntry, type ProviderEntry } from './providers-store.js';
+import type { AgentForgeConfig, ChatSession, NamedEntry, ParsedCli, RunnableModule } from './types.js';
 
 export const VERSION = '0.1.0';
 
 export const HELP = `AgentForge ${VERSION}
 
 Usage:
-  agentforge <command> [options]
+  agentforge [command] [options]
 
 Commands:
-  init <name|.>     Scaffold a local AgentForge project
-  dev               Start the configured development process
-  run <entry>       Execute an agent or workflow entrypoint
-  chat <entry>      Start an interactive agent session
-  test [patterns]   Run deterministic project tests
-  inspect <run-id>  Inspect a persisted run
-  providers         List configured model providers
-  tools             List configured tools
-  workflows         List configured workflows
-  doctor            Check the local AgentForge project
+  init <name|.>      Scaffold a local AgentForge project
+  dev                Start the configured development process
+  run <entry>        Execute an agent or workflow entrypoint once (headless)
+  chat [entry]       Interactive agent session (default when a project is configured; --plain to skip the TTY UI)
+  models list        List model providers, credentials, and defaults
+  providers [sub]    List endpoints, or manage custom/proxy endpoints:
+                       add <name> --protocol <p> --base-url <url> --model <id> --api-key-env <VAR>
+                       remove <name>
+                     Protocols: openai | anthropic | google | gemini | openai-compatible
+  test [patterns]    Run deterministic project tests
+  inspect <run-id>   Inspect a persisted run
+  tools              List configured tools
+  workflows          List configured workflows
+  doctor             Check the local AgentForge project
   connect <provider> Configure a provider credential or endpoint
 
+Chat slash commands:
+  /help /status /providers /tools /workflows /models
+  /model <name> /connect <provider> /clear /exit
+
 Global options:
-  --help, -h        Show this help
-  --version, -v     Show the CLI version
-  --json            Emit machine-readable output where supported
-  --cwd <path>      Run against a different project directory
+  --help, -h         Show this help
+  --version, -v      Show the CLI version
+  --json             Emit machine-readable output where supported
+  --cwd <path>       Run against a different project directory
+
+Environment:
+  AGENTFORGE_PROVIDER       Provider used by sessions (mock | openai | anthropic | google | managed endpoint name)
+  AGENTFORGE_MODEL          Model name override for interactive sessions
+  AGENTFORGE_BASE_URL       Endpoint override for OpenAI-compatible providers
 `;
+
+const CHAT_HELP = 'Commands: /help /exit /clear /status /providers /tools /workflows /models /model <name> /mode [read-only|ask|workspace-write|trusted] /connect <provider>';
 
 function flagBoolean(flags: Record<string, string | boolean>, key: string): boolean {
   return flags[key] === true || flags[key] === 'true';
@@ -44,6 +64,11 @@ function flagBoolean(flags: Record<string, string | boolean>, key: string): bool
 function flagString(flags: Record<string, string | boolean>, key: string): string | undefined {
   const value = flags[key];
   return typeof value === 'string' ? value : undefined;
+}
+
+function resolveModelName(model: AgentForgeConfig['model']): string | undefined {
+  if (typeof model === 'string') return model;
+  return model?.model;
 }
 
 export async function importEntry(entry: string, context: { configPath?: string } = {}): Promise<RunnableModule> {
@@ -86,17 +111,6 @@ async function readInput(flags: Record<string, string | boolean>): Promise<strin
   return 'Hello from AgentForge';
 }
 
-function resolveRunnable(module: RunnableModule): (input: string) => Promise<unknown> {
-  if (typeof module.run === 'function') return (input) => Promise.resolve(module.run?.(input));
-  if (typeof module.default === 'function') return (input) => Promise.resolve((module.default as (value: string) => unknown)(input));
-  if (module.agent && typeof module.agent.run === 'function') return (input) => Promise.resolve(module.agent?.run(input));
-  if (module.workflow && typeof module.workflow.run === 'function') return (input) => Promise.resolve(module.workflow?.run(input));
-  if (module.default && typeof module.default === 'object' && 'run' in module.default && typeof (module.default as { run?: unknown }).run === 'function') {
-    return (input) => Promise.resolve((module.default as { run: (value: string) => unknown }).run(input));
-  }
-  throw new Error('Entrypoint must export run(), a default runnable, agent.run(), or workflow.run().');
-}
-
 function serializableResult(result: unknown): unknown {
   if (result && typeof result === 'object' && 'output' in result) return result;
   return { output: result };
@@ -117,38 +131,197 @@ export async function runCommand(entry: string | undefined, flags: Record<string
   return 0;
 }
 
-/** Run a persistent terminal session with a local transcript. */
+/** Run a persistent terminal session. Renders an Ink UI on TTYs; plain readline otherwise. */
 export async function chatCommand(entry: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
   const { path: configPath, config } = await loadConfig();
   const selected = entry ?? config.entry;
   if (!selected) throw new Error('Missing entrypoint. Usage: agentforge chat <entry> or set entry in agentforge.config.ts.');
-  const runnable = resolveRunnable(await importEntry(selected, { configPath }));
-  const controller = new AbortController();
-  const onInterrupt = () => { controller.abort(); info('\nSession cancelled.'); };
-  process.once('SIGINT', onInterrupt);
-  const rl = createInterface({ input: stdin, output: stdout, terminal: Boolean(stdin.isTTY) });
-  const transcript: string[] = [];
-  try {
-    info('AgentForge chat. Type /help for commands, /exit to quit.');
-    while (!controller.signal.aborted) {
-      const input = (await rl.question('\nYou> ')).trim();
-      if (!input) continue;
-      if (input === '/exit' || input === '/quit') break;
-      if (input === '/help') { info('Commands: /help, /connect <provider>, /providers, /status, /model <name>, /clear, /exit'); continue; }
-      if (input === '/clear') { transcript.length = 0; info('Conversation cleared.'); continue; }
-      if (input === '/providers') { await listCommand('providers', {}); continue; }
-      if (input === '/status') { await doctorCommand({}); continue; }
-      if (input.startsWith('/connect')) { const [, provider] = input.split(/\s+/, 2); await connectCommand(provider, { 'no-prompt': true }); continue; }
-      if (input.startsWith('/model')) { const model = input.split(/\s+/, 2)[1]; if (!model) { info(`Current model: ${process.env.AGENTFORGE_MODEL ?? 'configured by project'}`); } else { process.env.AGENTFORGE_MODEL = model; info(`Model set for this session: ${model}`); } continue; }
-      if (input.startsWith('/')) { warn(`Unknown command: ${input}. Type /help.`); continue; }
-      transcript.push(`User: ${input}`);
-      const result = serializableResult(await runnable(transcript.join('\n') + '\nAssistant:'));
-      const output = result && typeof result === 'object' && 'output' in result ? (result as { output?: unknown }).output : result;
-      const text = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
-      transcript.push(`Assistant: ${text}`);
-      info(`\nAgent> ${text}`);
+  const module: RunnableModule = await importEntry(selected, { configPath });
+
+  if (process.stdout.isTTY && !flagBoolean(flags, 'plain')) {
+    return await runInteractiveChat(module, config);
+  }
+  return await runPlainChat(module);
+}
+
+async function runInteractiveChat(module: RunnableModule, config: AgentForgeConfig): Promise<number> {
+  const [{ render }, React, { ChatApp }] = await Promise.all([
+    import('ink'),
+    import('react'),
+    import('./ui/ChatApp.js'),
+  ]);
+  const baseRunner = buildTurnRunner(module);
+  const availableSkills = await listSkills();
+  const extensions = await readExtensions();
+  const runner = (input: string, signal: AbortSignal, context: { skills: readonly string[] }) =>
+    baseRunner(input, signal, { skills: skillBodies(availableSkills, context.skills) });
+  const instance = render(React.createElement(ChatApp, {
+    runner,
+    provider: process.env.AGENTFORGE_PROVIDER ?? config.provider ?? 'mock',
+    model: process.env.AGENTFORGE_MODEL ?? resolveModelName(config.model),
+    skills: availableSkills,
+    extensions: {
+      plugins: (extensions.plugins ?? []).map((plugin) => typeof plugin === 'string' ? plugin : plugin.path),
+      mcpServers: (extensions.mcp?.servers ?? []).map((server) => server.name),
+    },
+  }));
+  await instance.waitUntilExit();
+  return 0;
+}
+
+function parseChatSlash(raw: string): { name: string; args: string[] } | undefined {
+  if (!raw.startsWith('/')) return undefined;
+  const parts = raw.slice(1).split(/\s+/).filter(Boolean);
+  const name = parts[0]?.toLowerCase();
+  if (!name) return undefined;
+  return { name, args: parts.slice(1) };
+}
+
+async function handleChatSlash(line: string, session: ChatSession): Promise<'handled' | 'exit'> {
+  const command = parseChatSlash(line);
+  if (!command) return 'handled';
+  switch (command.name) {
+    case 'exit':
+    case 'quit':
+      return 'exit';
+    case 'help':
+      info(CHAT_HELP);
+      return 'handled';
+    case 'clear':
+      await session.reset?.();
+      info('Conversation cleared.');
+      return 'handled';
+    case 'providers':
+      await listCommand('providers', {});
+      return 'handled';
+    case 'tools':
+      await listCommand('tools', {});
+      return 'handled';
+    case 'workflows':
+      await listCommand('workflows', {});
+      return 'handled';
+    case 'models':
+      await modelsCommand({});
+      return 'handled';
+    case 'status':
+    case 'doctor':
+      await doctorCommand({});
+      return 'handled';
+    case 'connect':
+      await connectCommand(command.args[0], { 'no-prompt': true });
+      return 'handled';
+    case 'model': {
+      const model = command.args[0];
+      if (!model) info(`Current model: ${process.env.AGENTFORGE_MODEL ?? 'configured by project'}`);
+      else { process.env.AGENTFORGE_MODEL = model; info(`Model set for this session: ${model}`); }
+      return 'handled';
     }
-  } finally { rl.close(); process.removeListener('SIGINT', onInterrupt); }
+    case 'mode': {
+      const { PERMISSION_MODES, currentPermissionMode, setPermissionMode } = await import('./permissions-state.js');
+      const requested = command.args[0];
+      if (!requested) {
+        info(`Permission mode: ${currentPermissionMode()} (options: ${PERMISSION_MODES.join(', ')})`);
+        return 'handled';
+      }
+      if (!PERMISSION_MODES.includes(requested as never)) {
+        warn(`Unknown mode '${requested}'. Options: ${PERMISSION_MODES.join(', ')}.`);
+        return 'handled';
+      }
+      setPermissionMode(requested as typeof PERMISSION_MODES[number]);
+      info(`Permission mode set to '${requested}' for this session.`);
+      return 'handled';
+    }
+    default:
+      warn(`Unknown command: ${line}. Type /help.`);
+      return 'handled';
+  }
+}
+
+async function sendAndRender(session: ChatSession, input: string, signal?: AbortSignal): Promise<void> {
+  const started = Date.now();
+  try {
+    const turn = await session.send(input, signal ? { signal } : undefined);
+    let footer: string | undefined;
+    if (turn.stream) {
+      stdout.write('agent › ');
+      const drained = await drainStream(turn.stream, (delta) => stdout.write(delta), signal);
+      stdout.write('\n');
+      if (!drained.text && !drained.cancelled) info('(empty response)');
+      if (drained.cancelled) warn('turn cancelled');
+      footer = formatTurnFooter({
+        runId: drained.runId ?? turn.runId,
+        usage: drained.usage ?? turn.usage,
+        durationMs: turn.durationMs ?? Date.now() - started,
+        meta: drained.meta ?? turn.meta,
+      });
+    } else {
+      info(`agent › ${turn.text || '(empty response)'}`);
+      footer = formatTurnFooter({
+        runId: turn.runId,
+        usage: turn.usage,
+        durationMs: turn.durationMs ?? Date.now() - started,
+        meta: turn.meta,
+      });
+    }
+    if (footer) hint(footer);
+  } catch (caught) {
+    if (isCancelLike(caught) || signal?.aborted) warn('turn cancelled');
+    else error(`Error: ${formatError(caught)}`);
+  }
+}
+
+async function readPipedLines(): Promise<string[]> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stdin) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks).toString('utf8').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+}
+
+async function runPlainChat(module: RunnableModule): Promise<number> {
+  const session = await createSessionFromModule(module);
+  if (!stdin.isTTY) {
+    for (const line of await readPipedLines()) {
+      if (parseChatSlash(line)) { if ((await handleChatSlash(line, session)) === 'exit') break; continue; }
+      info(`you   › ${line}`);
+      await sendAndRender(session, line);
+    }
+    await session.close?.();
+    return 0;
+  }
+
+  const rl = createInterface({ input: stdin, output: stdout, terminal: true });
+  let exitRequested = false;
+  let busy = false;
+  let currentAbort: AbortController | undefined;
+  let lastInterruptAt = 0;
+  const onInterrupt = () => {
+    if (busy && currentAbort) { currentAbort.abort(); return; }
+    const now = Date.now();
+    if (now - lastInterruptAt < 2000) { exitRequested = true; rl.close(); return; }
+    lastInterruptAt = now;
+    info('\nPress Ctrl-C again to exit.');
+  };
+  process.once('SIGINT', onInterrupt);
+  rl.on('SIGINT', onInterrupt);
+  info('AgentForge chat (plain mode). Type /help for commands, Ctrl-C twice to quit.');
+  try {
+    while (!exitRequested) {
+      let line: string;
+      try { line = (await rl.question('\nyou   › ')).trim(); }
+      catch { break; }
+      if (exitRequested) break;
+      if (!line) continue;
+      while (line.endsWith('\\')) line = `${line.slice(0, -1)}\n${(await rl.question('…     › ')).replace(/\\$/, '')}`;
+      if (parseChatSlash(line)) { if ((await handleChatSlash(line, session)) === 'exit') break; continue; }
+      busy = true;
+      currentAbort = new AbortController();
+      try { await sendAndRender(session, line, currentAbort.signal); }
+      finally { busy = false; currentAbort = undefined; }
+    }
+  } finally {
+    rl.close();
+    process.removeListener('SIGINT', onInterrupt);
+    await session.close?.();
+  }
   return 0;
 }
 
@@ -164,6 +337,69 @@ export async function listCommand(kind: 'providers' | 'tools' | 'workflows', fla
   if (!entries.length) { hint(`No ${kind} configured${path ? ` in ${basename(path)}` : ''}.`); return 0; }
   for (const entry of entries) info(`  ${entry.name}${entry.description ? `  ${entry.description}` : ''}`);
   return 0;
+}
+
+export async function modelsCommand(flags: Record<string, string | boolean>): Promise<number> {
+  const { config } = await loadConfig({ required: false });
+  const rows = buildModelReport(config.providers ?? []);
+  if (flagBoolean(flags, 'json')) { printJson({ models: rows }); return 0; }
+  heading('Models');
+  for (const row of rows) {
+    const credentials = row.envVars.length ? row.envVars.join(' | ') : row.apiKeyEnv ? row.apiKeyEnv : 'no credential';
+    const state = row.ready === null ? 'config-defined' : row.ready ? 'ready' : 'credential missing';
+    info(`  ${row.provider.padEnd(24)} ${(row.protocol ?? '').padEnd(18)} ${(credentials).padEnd(30)} ${(row.defaultModel ?? '').padEnd(26)} ${state}`);
+    hint(`    ${row.description}${row.baseUrl ? ` · ${row.baseUrl}` : ''}${row.source === 'config' && !row.protocol ? ' · from agentforge.config.ts' : ''}`);
+  }
+  const selectedProvider = process.env.AGENTFORGE_PROVIDER ?? config.provider;
+  const selectedModel = typeof config.model === 'string' ? config.model : config.model?.model ?? process.env.AGENTFORGE_MODEL;
+  if (selectedProvider || selectedModel) hint(`Session default: ${selectedProvider ?? '(project default)'}${selectedModel ? `/${selectedModel}` : ''}`);
+  hint('Change with AGENTFORGE_PROVIDER / AGENTFORGE_MODEL, agentforge connect <provider>, or /model <name> inside chat.');
+  hint('Add custom endpoints: agentforge providers add <name> --protocol openai-compatible --base-url <url> --model <id> --api-key-env <VAR>');
+  return 0;
+}
+
+const PROVIDER_PROTOCOLS = ['openai', 'anthropic', 'google', 'gemini', 'openai-compatible'] as const;
+
+export async function providersCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
+  const [sub, name] = args;
+  if (!sub || sub === 'list' || sub === 'ls') {
+    const managed = await readProviderEntries();
+    if (managed.length) {
+      heading('Managed endpoints (.agentforge/providers.json)');
+      for (const entry of managed) {
+        info(`  ${entry.name.padEnd(24)} ${entry.protocol.padEnd(18)} ${entry.model ?? ''}`);
+        hint(`    ${entry.baseUrl ?? '(no base URL)'} · credential: ${entry.apiKeyEnv ? `${entry.apiKeyEnv} ${process.env[entry.apiKeyEnv] ? '(set)' : '(missing)'}` : 'none required'}`);
+      }
+      info('');
+    }
+    return await listCommand('providers', flags);
+  }
+  if (sub === 'add') {
+    if (!name) throw new Error('Usage: agentforge providers add <name> --protocol <openai|anthropic|google|gemini|openai-compatible> --base-url <url> --model <id> --api-key-env <VAR>');
+    const protocolInput = flagString(flags, 'protocol') ?? 'openai-compatible';
+    if (!PROVIDER_PROTOCOLS.includes(protocolInput as typeof PROVIDER_PROTOCOLS[number])) {
+      throw new Error(`Unsupported --protocol '${protocolInput}'. Choose one of ${PROVIDER_PROTOCOLS.join(', ')}.`);
+    }
+    const added = await addProviderEntry(name, {
+      protocol: protocolInput as ProviderEntry['protocol'],
+      baseUrl: flagString(flags, 'base-url'),
+      model: flagString(flags, 'model'),
+      apiKeyEnv: flagString(flags, 'api-key-env'),
+      force: flagBoolean(flags, 'force'),
+    });
+    success(`${added.replaced ? 'Replaced' : 'Added'} endpoint '${added.entry.name}' (${added.entry.protocol}) in .agentforge/providers.json`);
+    if (added.entry.apiKeyEnv) hint(`Export ${added.entry.apiKeyEnv} before use; secrets are never stored in this file.`);
+    else hint('No credential variable configured; local endpoints may not need one.');
+    hint(`Use it with AGENTFORGE_PROVIDER=${added.entry.name} or /model ${added.entry.name} inside a chat session.`);
+    return 0;
+  }
+  if (sub === 'remove' || sub === 'rm') {
+    if (!name) throw new Error('Usage: agentforge providers remove <name>.');
+    if (await removeProviderEntry(name)) { success(`Removed endpoint '${name}' from .agentforge/providers.json.`); return 0; }
+    warn(`Endpoint '${name}' was not found in .agentforge/providers.json.`);
+    return 1;
+  }
+  throw new Error(`Unknown providers subcommand: ${sub}. Usage: agentforge providers [list|add|remove].`);
 }
 
 async function findLocalRepoRoot(start = process.cwd()): Promise<string | undefined> {
@@ -187,9 +423,14 @@ export async function initCommand(name: string | undefined, flags: Record<string
   if (flagBoolean(flags, 'local') && !localRoot) throw new Error('`agentforge init --local` requires --local-root <agentforge-repo> or AGENTFORGE_REPO_ROOT.');
   const target = await scaffold(name, process.cwd(), flagBoolean(flags, 'force'), localRoot);
   success(`Created ${target}`);
-  const install = localRoot ? 'pnpm install' : 'npm install';
-  const runner = localRoot ? 'pnpm exec agentforge' : 'npx agentforge';
-  hint(`Next: cd ${name === '.' ? '.' : name} && ${install} && ${runner} chat`);
+  if (localRoot) {
+    hint(`Next: cd ${name === '.' ? '.' : name} && pnpm install && pnpm exec agentforge chat`);
+    hint(`Local-link mode: packages are linked from ${resolve(localRoot)} via file: dependencies.`);
+  } else {
+    hint(`Next: cd ${name === '.' ? '.' : name} && npm install && npx agentforge chat`);
+    warn('@agentforge packages are not published to a registry yet. Prefer local-link mode:');
+    hint(`  agentforge init ${name} --local-root <path-to-agentforge-repo>   (or set AGENTFORGE_REPO_ROOT)`);
+  }
   return 0;
 }
 

@@ -13,3 +13,6 @@ coverage/
 
 # Stray generated project kept locally, not part of the workspace
 /test/
+
+# Playground local run history (JSONL store)
+/apps/playground/.agentforge/
