@@ -17,12 +17,17 @@ export async function launchInteractiveShell(): Promise<boolean> {
   }
 
   // Project detection is best-effort and never fatal: no project simply means
-  // global/session mode.
+  // global/session mode. It only affects the status-line badge.
   const { detectProject } = await import('./runtime-session.js');
   const detection = await detectProject();
 
-  let runner: import('./ui/turn.js').TurnRunner;
+  // REAL model runner: provider/model resolved from env detection (or
+  // AGENTFORGE_* overrides) and backed by @agentforge-oss/models. A project
+  // entrypoint can still override the runner, but is never required.
+  const { resolveModelRunner } = await import('./model-runner.js');
+  let resolved = await resolveModelRunner();
   let projectName: string | undefined;
+
   if (detection.found && detection.configPath) {
     try {
       const { importEntry } = await import('./commands.js');
@@ -31,22 +36,14 @@ export async function launchInteractiveShell(): Promise<boolean> {
       const { config } = await loadConfig({ required: false });
       if (config.entry) {
         const module = await importEntry(config.entry, { configPath: detection.configPath });
-        runner = buildTurnRunner(module);
+        resolved = { ...resolved, runner: buildTurnRunner(module) };
         projectName = config.name;
-      } else {
-        runner = await bareGuidanceRunner();
       }
     } catch {
-      runner = await bareGuidanceRunner();
+      /* project entrypoint failed — keep the real model runner */
     }
-  } else {
-    runner = await bareGuidanceRunner();
   }
-
-  async function bareGuidanceRunner(): Promise<import('./ui/turn.js').TurnRunner> {
-    const { createBareRunner } = await import('./runtime-session.js');
-    return createBareRunner();
-  }
+  const runner = resolved.runner;
 
   const [{ render }, React, slash, { TuiRoot }] = await Promise.all([
     import('ink'),
@@ -69,6 +66,13 @@ export async function launchInteractiveShell(): Promise<boolean> {
   ]);
   const { resolveActiveProvider } = await import('./global-config.js');
   const resolution = await resolveActiveProvider();
+  // Prefer the model-runner detection (env keys) over stale global defaults,
+  // so a fresh env var beats an old config entry.
+  if (!process.env.AGENTFORGE_PROVIDER) {
+    resolved = { ...resolved };
+  }
+  resolution.provider = resolved.provider;
+  resolution.model = resolved.model;
 
   const screens: Record<string, ComponentType> = {
     tools: ToolsScreen as ComponentType,
