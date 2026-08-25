@@ -9,10 +9,10 @@ import { buildModelReport } from '../../session.js';
 import { readProviderEntries } from '../../providers-store.js';
 import {
   addRecentProject,
-  detectProject,
   resolveActiveProvider,
   validateProviderConnection,
-} from './local-global-config.js';
+} from '../../global-config.js';
+import { detectProject } from '../../runtime-session.js';
 
 /**
  * Central slash-command router.
@@ -117,7 +117,7 @@ async function currentModelNames(): Promise<string[]> {
 
 export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[] {
   const ctx: CommandContext = {
-    mode: handlers.mode ?? (() => (detectProject().detected ? 'project' : 'global')),
+    mode: handlers.mode ?? (() => 'global'),
     pushSystem: handlers.pushSystem,
     clearConversation: handlers.clearConversation,
     exitRequested: handlers.exitRequested,
@@ -292,21 +292,19 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
       usage: '/status',
       category: 'system',
       run: () => {
-        const project = detectProject();
-        const active = resolveActiveProvider();
-        const check = active.source === 'none'
-          ? undefined
-          : validateProviderConnection({ provider: active.provider });
-        const lines = [
-          `mode: ${project.detected ? 'project' : 'global'}`,
-          `cwd: ${process.cwd()}`,
-          `detected project: ${project.detected ? `${project.name} (${project.marker})` : 'none — session mode'}`,
-          `provider: ${active.provider}${active.model ? ` · model: ${active.model}` : ''} (${active.source})`,
-          `connection: ${check ? (check.ready ? '✓ ready' : `! not ready — ${check.reason ?? 'unknown'} (fix: ${check.fix ?? 'run /connect'})`) : '(no provider selected — run /connect)'}`,
-          `session: ${process.env.AGENTFORGE_MODEL ? `active (model ${process.env.AGENTFORGE_MODEL})` : 'active (default model)'}`,
-          `permission mode: ${currentPermissionMode()}`,
-        ];
-        ctx.pushSystem(lines.join('\n'));
+        void (async () => {
+          const project = await detectProject();
+          const active = await resolveActiveProvider();
+          const lines = [
+            `mode: ${project.found ? 'project' : 'global (session mode)'}`,
+            `cwd: ${process.cwd()}`,
+            `detected project: ${project.found ? project.path : 'none — run /new or /cd <path>'}`,
+            `provider: ${active.provider}${active.model ? ` · model: ${active.model}` : ''} (${active.source})`,
+            `session: ${process.env.AGENTFORGE_MODEL ? `active (model ${process.env.AGENTFORGE_MODEL})` : 'active (default model)'}`,
+            `permission mode: ${currentPermissionMode()}`,
+          ];
+          ctx.pushSystem(lines.join('\n'));
+        })();
       },
     },
     {
@@ -339,16 +337,13 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
       category: 'system',
       run: () =>
         ctx.runSuspended(async () => {
-          const before = detectProject();
           const previousCwd = process.cwd();
           console.log(`Reloading project state for ${previousCwd} …`);
-          const after = detectProject(previousCwd);
-          const changed =
-            before.detected !== after.detected || before.marker !== after.marker || before.name !== after.name;
+          const after = await detectProject(previousCwd);
           console.log(
-            changed
-              ? `Project detection changed: ${before.detected ? `${before.name} (${before.marker})` : 'none'} → ${after.detected ? `${after.name} (${after.marker})` : 'none'}`
-              : `No change: ${after.detected ? `${after.name} (${after.marker})` : 'no project detected — session mode'}.`,
+            after.found
+              ? `Project detected: ${after.path}.`
+              : 'No change: no project detected — global/session mode.',
           );
           return 0;
         }),
@@ -369,15 +364,16 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
           ctx.pushSystem(`✗ /cd failed: ${(error as Error).message}`);
           return;
         }
-        const recent = addRecentProject(resolved);
-        const project = detectProject(resolved);
-        const lines = [
-          `cwd → ${resolved}`,
-          `project: ${project.detected ? `${project.name} (${project.marker})` : 'none — session mode'}`,
-          `recent projects: ${recent.length}`,
-        ];
-        ctx.pushSystem(lines.join('\n'));
-        ctx.refreshStatus();
+        void (async () => {
+          await addRecentProject(resolved);
+          const project = await detectProject(resolved);
+          ctx.pushSystem([
+            `cwd → ${resolved}`,
+            `project: ${project.found ? project.path : 'none — session mode'}`,
+            `recent projects: see ~/.agentforge/config.json`,
+          ].join('\n'));
+          ctx.refreshStatus();
+        })();
       },
     },
     {
@@ -453,7 +449,7 @@ export function dispatchSlash(
 
 function fallbackContext(pushSystem: (text: string) => void): CommandContext {
   return {
-    mode: () => (detectProject().detected ? 'project' : 'global'),
+    mode: () => 'global',
     pushSystem,
     clearConversation: () => { /* legacy no-op */ },
     exitRequested: () => process.exit(0),

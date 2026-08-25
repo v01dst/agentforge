@@ -1,4 +1,5 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { accessSync, constants } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -151,6 +152,16 @@ export async function addRecentProject(path: string, dir = join(homedir(), '.age
   const absolute = resolve(path);
   config.recentProjects = [absolute, ...config.recentProjects.filter((existing) => existing !== absolute)].slice(0, RECENT_PROJECT_LIMIT);
   await writeGlobalConfig(config, dir);
+}
+
+/** True when `path` exists and is readable by the current process. */
+export function pathReadable(path: string): boolean {
+  try {
+    accessSync(path, constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export interface ValidateConnectionOptions {

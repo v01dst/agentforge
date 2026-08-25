@@ -1,14 +1,14 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { existsSync } from 'node:fs';
 import { VERSION } from '../../commands.js';
 import {
-  detectProject,
   globalConfigDir,
   pathReadable,
   readGlobalConfig,
-  validateProviderConnection,
-} from './local-global-config.js';
+  resolveActiveProvider,
+} from '../../global-config.js';
+import { detectProject } from '../../runtime-session.js';
 
 /**
  * Interactive environment checklist (/doctor). Pure Ink list; every failing row
@@ -28,25 +28,27 @@ interface CheckSection {
   rows: CheckRow[];
 }
 
-function buildSections(): CheckSection[] {
+const CREDENTIAL_PROVIDERS: ReadonlyArray<{ id: string; envs: readonly string[] }> = [
+  { id: 'openai', envs: ['OPENAI_API_KEY'] },
+  { id: 'anthropic', envs: ['ANTHROPIC_API_KEY'] },
+  { id: 'google', envs: ['GOOGLE_API_KEY', 'GEMINI_API_KEY'] },
+];
+
+function badge(ok: boolean): string {
+  return ok ? '✓' : '!';
+}
+
+function buildSections(input: {
+  configDir: string;
+  dirReadable: boolean;
+  configuredProviders: number;
+  project: { found: boolean; name?: string };
+  active: { provider: string; model?: string; source: string };
+}): CheckSection[] {
   const nodeMajor = Number.parseInt(process.versions.node.split('.')[0] ?? '0', 10);
   const isTTY = Boolean(process.stdout.isTTY);
   const term = process.env.TERM;
   const hasColors = typeof process.stdout.hasColors === 'function' ? process.stdout.hasColors() : isTTY;
-
-  const configDir = globalConfigDir();
-  const dirExists = existsSync(configDir);
-  const dirReadable = dirExists && pathReadable(configDir);
-  const config = readGlobalConfig();
-  const configuredProviders = Array.isArray(config.providers) ? config.providers.length : 0;
-
-  const credentialProviders: ReadonlyArray<{ id: string; envs: readonly string[] }> = [
-    { id: 'openai', envs: ['OPENAI_API_KEY'] },
-    { id: 'anthropic', envs: ['ANTHROPIC_API_KEY'] },
-    { id: 'google', envs: ['GOOGLE_API_KEY', 'GEMINI_API_KEY'] },
-  ];
-
-  const project = detectProject();
 
   return [
     {
@@ -75,68 +77,101 @@ function buildSections(): CheckSection[] {
     {
       title: 'Configuration',
       rows: [
-        dirReadable
-          ? { label: `global config dir ${configDir}`, ok: true }
+        input.dirReadable
+          ? { label: `global config dir ${input.configDir}`, ok: true }
           : {
-              label: `global config dir ${configDir}`,
+              label: `global config dir ${input.configDir}`,
               ok: false,
-              fix: dirExists ? 'check directory permissions' : 'run /connect once to create it (or mkdir ~/.agentforge)',
+              fix: existsSync(input.configDir) ? 'check directory permissions' : 'run /connect once to create it (or mkdir ~/.agentforge)',
             },
-        configuredProviders > 0
-          ? { label: `providers configured: ${configuredProviders}`, ok: true }
+        input.configuredProviders > 0
+          ? { label: `providers configured: ${input.configuredProviders}`, ok: true }
           : { label: 'no providers configured yet', ok: false, fix: 'run /connect to add one' },
-        ...credentialProviders.map((provider) => {
-          const check = validateProviderConnection({ provider: provider.id });
-          return check.ready
+        ...CREDENTIAL_PROVIDERS.map((provider) => {
+          const set = provider.envs.some((env) => Boolean(process.env[env]));
+          return set
             ? { label: `${provider.id}: credential env var set`, ok: true }
             : {
                 label: `${provider.id}: none of ${provider.envs.join(' / ')} set`,
-                ok: false,
+                ok: false as const,
                 fix: `export ${provider.envs[0]}=<key> or run /connect`,
               };
         }),
       ],
     },
     {
-      title: 'Project',
+      title: 'Project & session',
       rows: [
-        project.detected
-          ? { label: `detected project: ${project.name} (${project.marker})`, ok: true }
+        input.project.found
+          ? { label: `detected project: ${input.project.name ?? '(unnamed)'}`, ok: true }
           : {
-              label: 'detected project: none — session mode',
-              ok: false,
+              label: 'detected project: none — global/session mode',
+              ok: true,
               detail: 'some commands (/agents, /workflows, /runs) need a project',
               fix: 'run /new to scaffold one here, or /cd <path> to switch',
             },
+        { label: `active provider: ${input.active.provider} (via ${input.active.source})${input.active.model ? ` · model: ${input.active.model}` : ''}`, ok: true },
       ],
     },
   ];
 }
 
-function badge(ok: boolean): string {
-  return ok ? '✓' : '!';
-}
+export function DoctorScreen({ onBack }: { onBack?: () => void } = {}): React.ReactElement {
+  const [sections, setSections] = useState<CheckSection[] | null>(null);
 
-export function DoctorScreen({ onBack }: { onBack?: () => void }): React.ReactElement {
-  const sections = buildSections();
-  useInput((_input, key) => {
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const configDir = await globalConfigDir();
+        const dirExists = existsSync(configDir);
+        const dirReadable = dirExists && pathReadable(configDir);
+        const config = await readGlobalConfig(configDir);
+        const active = await resolveActiveProvider(configDir);
+        const project = await detectProject(process.cwd());
+        if (!alive) return;
+        setSections(buildSections({
+          configDir,
+          dirReadable,
+          configuredProviders: Array.isArray(config.providers) ? config.providers.length : 0,
+          project: { found: project.found, name: project.path },
+          active: { provider: active.provider, model: active.model, source: active.source },
+        }));
+      } catch (error) {
+        if (alive) {
+          setSections([{
+            title: 'Error',
+            rows: [{ label: `diagnostics failed: ${error instanceof Error ? error.message : String(error)}`, ok: false, fix: 'run agentforge doctor in a terminal for details' }],
+          }]);
+        }
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  useInput((_value, key) => {
     if (key.escape || key.return) onBack?.();
   });
 
+  if (!sections) {
+    return (
+      <Box flexDirection="column" paddingX={1}>
+        <Text dimColor>Running diagnostics…</Text>
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Text bold>Doctor</Text>
-      <Text dimColor>environment checklist · Esc back</Text>
+      <Text bold>AgentForge Doctor</Text>
+      <Text dimColor>Esc or Enter returns to chat</Text>
       {sections.map((section) => (
         <Box key={section.title} flexDirection="column" marginTop={1}>
-          <Text bold>{section.title}</Text>
+          <Text bold underline>{section.title}</Text>
           {section.rows.map((row) => (
             <Box key={row.label} flexDirection="column">
-              <Text color={row.ok ? 'green' : 'yellow'}>
-                {badge(row.ok)} {row.label}
-                {row.detail ? <Text dimColor> {row.detail}</Text> : null}
-              </Text>
-              {!row.ok && row.fix ? <Text dimColor>   fix: {row.fix}</Text> : null}
+              <Text color={row.ok ? 'green' : 'yellow'}>{badge(row.ok)} {row.label}{row.detail ? ` ${row.detail}` : ''}</Text>
+              {!row.ok && row.fix ? <Text dimColor>{'    '}fix: {row.fix}</Text> : null}
             </Box>
           ))}
         </Box>
@@ -144,3 +179,5 @@ export function DoctorScreen({ onBack }: { onBack?: () => void }): React.ReactEl
     </Box>
   );
 }
+
+export default DoctorScreen;

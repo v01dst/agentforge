@@ -8,7 +8,7 @@ const files: Record<string, string> = {
   "packageManager": "pnpm@9.15.5",
   "type": "module",
   "scripts": { "run": "agentforge run src/agent.ts", "chat": "agentforge chat src/agent.ts", "start": "agentforge", "typecheck": "tsc --noEmit", "test": "tsx --test test/*.test.ts" },
-  "dependencies": { "@agentforge-oss/cli": "^0.3.0", "@agentforge-oss/core": "^0.3.0", "@agentforge-oss/models": "^0.3.0" },
+  "dependencies": { "@agentforge-oss/cli": "^0.3.1", "@agentforge-oss/core": "^0.3.1", "@agentforge-oss/models": "^0.3.1" },
   "devDependencies": { "@types/node": "^22.10.2", "tsx": "^4.19.2", "typescript": "^5.7.2" }
 }
 `,

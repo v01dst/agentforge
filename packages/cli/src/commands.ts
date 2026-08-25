@@ -15,7 +15,7 @@ import { buildModelReport, createSessionFromModule, drainStream, formatTurnFoote
 import { addProviderEntry, readProviderEntries, removeProviderEntry, type ProviderEntry } from './providers-store.js';
 import type { AgentForgeConfig, ChatSession, NamedEntry, ParsedCli, RunnableModule } from './types.js';
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.3.1';
 
 export const HELP = `AgentForge ${VERSION}
 

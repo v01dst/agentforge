@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { setGlobalDefault, validateProviderConnection } from './local-global-config.js';
+import { setGlobalDefault, validateProviderConnection } from '../../global-config.js';
 
 /**
  * Interactive provider setup wizard. Works with zero project.
@@ -65,14 +65,15 @@ export function ConnectWizard({ onBack }: { onBack?: () => void }): React.ReactE
 
   function runValidation(): void {
     if (!state.provider) return;
-    const result = validateProviderConnection({
-      provider: state.provider,
-      apiKeyEnv: state.apiKeyEnv,
+    void validateProviderConnection({
+      name: state.provider,
+      protocol: state.provider,
+      apiKeyEnv: state.apiKeyEnv ?? DEFAULT_ENV[state.provider],
       baseUrl: state.baseUrl,
-      live: false,
+    }, { live: false }).then((result) => {
+      setValidation({ ready: result.ok, reason: result.ok ? undefined : result.reason });
+      setStep(result.ok ? 'done' : 'validate');
     });
-    setValidation(result);
-    setStep(result.ready ? 'done' : 'validate');
   }
 
   useInput((value, key) => {
@@ -100,7 +101,7 @@ export function ConnectWizard({ onBack }: { onBack?: () => void }): React.ReactE
       }
       case 'persist': {
         if (value === 'y' || value === 'Y') {
-          if (state.provider) setGlobalDefault({ provider: state.provider, model: state.model });
+          if (state.provider) void setGlobalDefault(state.provider, state.model);
           setState((prev) => ({ ...prev, persisted: true }));
           setStep(state.provider === 'openai-compatible' ? 'custom-base-url' : 'validate');
         } else if (value === 'n' || value === 'N' || key.return) {

@@ -111,10 +111,12 @@ export async function launchInteractiveShell(): Promise<boolean> {
     });
 
   // Branded startup splash (~600ms), then the persistent TUI.
+  const { VERSION } = await import('./commands.js');
   const { StartupBanner } = await import('./ui/shell/StartupBanner.js');
   await new Promise<void>((resolveSplash) => {
     const splash = render(React.createElement(StartupBanner as unknown as ComponentType<Record<string, unknown>>, {
       ms: 600,
+      version: VERSION,
       onDone: () => {
         splash.unmount();
         resolveSplash();

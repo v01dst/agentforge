@@ -3,7 +3,11 @@ import { Box, Text, useInput } from 'ink';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { listSkills, parseFrontmatter, type SkillInfo } from '../../skills/skills.js';
-import { globalConfigDir } from './local-global-config.js';
+import { globalConfigDir } from '../../global-config.js';
+
+async function globalSkillsDir(): Promise<string> {
+  return join(await globalConfigDir(), 'skills');
+}
 
 type SkillScope = 'project' | 'global';
 type ScopedSkill = SkillInfo & { scope: SkillScope };
@@ -14,7 +18,7 @@ function bodyPreview(body: string | undefined): string[] {
 }
 
 async function listGlobalSkills(): Promise<SkillInfo[]> {
-  const dir = join(globalConfigDir(), 'skills');
+  const dir = await globalSkillsDir();
   let files: string[];
   try {
     files = (await readdir(dir)).filter((file) => file.endsWith('.md')).sort();
@@ -96,14 +100,14 @@ export function SkillsScreen({ onBack }: { onBack?: () => void }): React.ReactEl
   return (
     <Box flexDirection="column" paddingX={1}>
       <Text bold>Skills</Text>
-      <Text dimColor>project: .agentforge/skills · global: {join(globalConfigDir(), 'skills')}</Text>
+      <Text dimColor>project: .agentforge/skills · global dir shown below</Text>
       <Text dimColor>type to filter · enter toggle active · Esc back</Text>
       <Text>Filter: {query || '(none)'}▏</Text>
       <Box flexDirection="column" marginTop={1}>
         {skills === null
           ? <Text dimColor>Loading skills…</Text>
           : filtered.length === 0
-            ? <Text dimColor>{'(no skills found — add markdown files under .agentforge/skills/ or ' + join(globalConfigDir(), 'skills') + ')'}</Text>
+            ? <Text dimColor>{'(no skills found — add markdown files under .agentforge/skills/ or set AGENTFORGE_HOME)'}</Text>
             : filtered.map((skill, i) => (
                 <Text key={`${skill.scope}:${skill.name}`} color={i === index ? 'cyan' : undefined}>
                   {i === index ? '❯ ' : '  '}
