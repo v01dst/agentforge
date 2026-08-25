@@ -5,16 +5,30 @@ export interface TurnUsage {
   estimatedCostUsd?: number;
 }
 
+export interface ToolEvent {
+  name: string;
+  argsSummary?: string;
+  state: 'running' | 'done';
+  ms?: number;
+}
+
 export interface TurnDelta {
   text?: string;
   usage?: TurnUsage;
   runId?: string;
-  tool?: { name: string; ms?: number };
+  /** Structured tool-call event for live tool activity display. */
+  tool?: ToolEvent;
 }
 
 export type SkillSelection = readonly string[];
 
-export type TurnRunner = (input: string, signal: AbortSignal, context: { skills: SkillSelection }) => AsyncIterable<TurnDelta>;
+export interface TurnContext {
+  skills: SkillSelection;
+  /** Prior turns as "role: text" lines, oldest first (bounded by caller). */
+  history?: readonly string[];
+}
+
+export type TurnRunner = (input: string, signal: AbortSignal, context: TurnContext) => AsyncIterable<TurnDelta>;
 
 /** Extract human-readable text from any runnable result shape. */
 export function resultText(result: unknown): string {

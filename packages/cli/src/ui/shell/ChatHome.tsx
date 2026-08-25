@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Static, Text, useInput } from 'ink';
-import { currentPermissionMode } from '../../permissions-state.js';
 import { parseSlashCommand } from '../turn.js';
 import { useTurn } from '../useTurn.js';
 import type { ChatMessage } from '../useTurn.js';
 import type { TurnRunner } from '../turn.js';
 import { ActivityIndicator } from './Activity.js';
-import { Frame } from './Frame.js';
+import { validateProviderConnection } from '../../global-config.js';
+import type { GlobalProviderEntry } from '../../global-config.js';
 
 export interface SlashCommand {
   name: string;
@@ -23,6 +23,10 @@ export interface ChatHomeProps {
   /** Contextual label shown next to the spinner while a turn is running. */
   activity?: string;
   projectName?: string;
+  /** True when no provider key is configured — show inline first-run onboarding. */
+  needsOnboarding?: boolean;
+  /** Called after a provider key validates so the parent can refresh status. */
+  onProviderConnected?: () => void;
 }
 
 /** Built-in slash-command registry surfaced in the suggestion menu. */
@@ -72,20 +76,35 @@ function MessageRow({ message }: { message: ChatMessage }) {
  * Chat-first home screen: a persistent chat interface with live streaming,
  * inline slash-command suggestions above the input, and a status bar.
  */
-export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', model, activity, projectName }: ChatHomeProps) {
-  const { messages, streamingText, running, status, lastError, send, cancel, clear, pushSystem } = useTurn(runner);
+export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', model, activity, projectName, needsOnboarding = false, onProviderConnected }: ChatHomeProps) {
+  const { messages, streamingText, running, status, lastError, toolEvents, send, cancel, clear, pushSystem } = useTurn(runner);
   const [input, setInput] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [menuDismissed, setMenuDismissed] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [awaitingChoice, setAwaitingChoice] = useState<'provider' | 'key' | undefined>(undefined);
+  const [pendingProvider, setPendingProvider] = useState<Pick<GlobalProviderEntry, 'name' | 'protocol' | 'apiKeyEnv'> | null>(null);
   const draftRef = useRef('');
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Welcome banner so users know the interface is ready and how to discover
-  // commands (rendered once, before the first message).
+  // commands (rendered once, before the first message). During first-run
+  // onboarding it instead presents the provider picker.
   useEffect(() => {
+    if (needsOnboarding) {
+      pushSystem(
+        'Welcome to AgentForge.\n\nNo model connected yet. Pick one:\n' +
+        '  [1] OpenAI     (OPENAI_API_KEY)\n' +
+        '  [2] Anthropic  (ANTHROPIC_API_KEY)\n' +
+        '  [3] Google     (GEMINI_API_KEY)\n' +
+        '  [s] Skip — use offline mock\n\n' +
+        'Reply with a number, or set the env var and /reload.',
+      );
+      setAwaitingChoice('provider');
+      return;
+    }
     pushSystem('AgentForge ready — type a message to chat, or / for commands. /help lists everything.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -128,6 +147,7 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
     setHistoryIndex(-1);
     draftRef.current = '';
     if (!raw.startsWith('/')) {
+      if (handleOnboardingInput(raw)) return;
       void send(raw);
       return;
     }
@@ -141,6 +161,47 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
       return;
     }
     onSlashCommand?.(command.name, command.args);
+  };
+
+  /** Inline first-run provider onboarding: runs only for non-slash input. */
+  const handleOnboardingInput = (raw: string): boolean => {
+    if (awaitingChoice === 'provider') {
+      if (raw === '1' || raw === '2' || raw === '3') {
+        const options: ReadonlyArray<Pick<GlobalProviderEntry, 'name' | 'protocol' | 'apiKeyEnv'>> = [
+          { name: 'OpenAI', protocol: 'openai', apiKeyEnv: 'OPENAI_API_KEY' },
+          { name: 'Anthropic', protocol: 'anthropic', apiKeyEnv: 'ANTHROPIC_API_KEY' },
+          { name: 'Google', protocol: 'gemini', apiKeyEnv: 'GEMINI_API_KEY' },
+        ];
+        const chosen = options[Number(raw) - 1];
+        if (!chosen) return true;
+        setPendingProvider(chosen);
+        setAwaitingChoice('key');
+        pushSystem(`Paste your ${chosen.apiKeyEnv} (input will be masked):`);
+      } else if (raw === 's' || raw === 'S') {
+        setAwaitingChoice(undefined);
+        pushSystem('Offline mock mode active — /connect anytime.');
+      } else {
+        pushSystem('Reply with 1, 2, 3, or s to skip.');
+      }
+      return true;
+    }
+    if (awaitingChoice === 'key') {
+      const entry = pendingProvider;
+      setAwaitingChoice(undefined);
+      setPendingProvider(null);
+      if (!entry) return true;
+      process.env[entry.apiKeyEnv] = raw;
+      void validateProviderConnection(entry, { live: false }).then((result) => {
+        if (result.ok) {
+          pushSystem('connected — say hello!');
+          onProviderConnected?.();
+        } else {
+          pushSystem(result.reason ?? `Could not validate ${entry.name}.`);
+        }
+      });
+      return true;
+    }
+    return false;
   };
 
   useInput((value, key) => {
@@ -212,16 +273,24 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
   });
 
   return (
-    <Frame
-      mode={projectName ? { kind: 'project', name: projectName } : { kind: 'global' }}
-      provider={provider}
-      model={model}
-    >
     <Box flexDirection="column">
       <Static items={messages}>
         {(message, index) => <MessageRow key={index} message={message} />}
       </Static>
       {streamingText ? <MessageRow message={{ role: 'assistant', text: streamingText }} /> : null}
+      <Box flexDirection="column">
+        {toolEvents.map((event) =>
+          event.state === 'running' ? (
+            <Text key={`${event.name}-running`} color="cyan">
+              {'⠿ '}{event.name}{event.argsSummary ? ` ${event.argsSummary.slice(0, 60)}` : ''}
+            </Text>
+          ) : (
+            <Text key={`${event.name}-done`} dimColor color="green">
+              {'✓ '}{event.name}{event.ms !== undefined ? ` (${event.ms}ms)` : ''}
+            </Text>
+          ),
+        )}
+      </Box>
       {running ? <ActivityIndicator label={activity ?? 'working… (Ctrl-C to cancel)'} /> : null}
       {lastError && !running ? (
         <Box borderStyle="round" borderColor="red" paddingX={1} flexDirection="column" marginTop={1}>
@@ -249,14 +318,44 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
         <Text>{input}</Text>
         <Text dimColor>▏</Text>
       </Box>
-      <Box marginTop={0} gap={2}>
-        <Text dimColor>{provider}{model ? ` · ${model}` : ''}</Text>
-        <Text dimColor>mode: {currentPermissionMode()}</Text>
-        {status.totalTokens !== undefined ? <Text dimColor>tokens: {status.totalTokens}</Text> : null}
-        {status.elapsedMs !== undefined ? <Text dimColor>last: {(status.elapsedMs / 1000).toFixed(1)}s</Text> : null}
-        <Text dimColor>[Ctrl+K] palette [?] help</Text>
-      </Box>
+      <StatusLine
+        provider={provider}
+        model={model}
+        projectName={projectName}
+        totalTokens={status.totalTokens}
+        elapsedMs={status.elapsedMs}
+      />
     </Box>
-    </Frame>
+  );
+}
+
+/**
+ * Single dim status line replacing the old header/footer chrome:
+ * `project:<name> · <provider>/<model> · <N> tok · <X.X>s · ctrl+c cancel`.
+ * Segments are omitted when their value is undefined.
+ */
+function StatusLine({
+  provider,
+  model,
+  projectName,
+  totalTokens,
+  elapsedMs,
+}: {
+  provider?: string;
+  model?: string;
+  projectName?: string;
+  totalTokens?: number;
+  elapsedMs?: number;
+}) {
+  const segments: string[] = [];
+  if (projectName) segments.push(`project:${projectName}`);
+  if (provider || model) segments.push([provider, model].filter(Boolean).join('/'));
+  if (totalTokens !== undefined) segments.push(`${totalTokens} tok`);
+  if (elapsedMs !== undefined) segments.push(`${(elapsedMs / 1000).toFixed(1)}s`);
+  segments.push('ctrl+c cancel');
+  return (
+    <Box marginTop={0}>
+      {segments.length > 0 ? <Text dimColor>{segments.join(' · ')}</Text> : null}
+    </Box>
   );
 }

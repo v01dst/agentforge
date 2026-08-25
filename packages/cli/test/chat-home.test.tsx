@@ -41,9 +41,8 @@ test('ChatHome renders status bar with provider and model', async () => {
   }));
   await delay(30);
   const frame = instance.lastFrame() ?? '';
-  assert.match(frame, /mock-provider · agentforge-local/);
-  assert.match(frame, /mode:/);
-  assert.match(frame, /\[Ctrl\+K\] palette \[\?\] help/);
+  assert.match(frame, /mock-provider\/agentforge-local/);
+  assert.match(frame, /ctrl\+c cancel/);
   instance.unmount();
 });
 
@@ -69,7 +68,7 @@ test('normal text + Enter sends a turn and shows user + assistant messages', asy
   const frame = instance.lastFrame() ?? '';
   assert.match(frame, /you › hello agent/);
   assert.match(frame, /reply-to:hello agent/);
-  assert.match(frame, /tokens: 7/);
+  assert.match(frame, /7 tok/);
   instance.unmount();
 });
 
@@ -160,7 +159,7 @@ test('tool-role messages render as dim tool-call lines with duration', async () 
   instance.stdin.write('\r');
   await delay(200);
   const frame = instance.lastFrame() ?? '';
-  assert.match(frame, /tool › web_search \(1\.2s\)/);
+  assert.match(frame, /web_search \(1200ms\)/);
   assert.match(frame, /searched/);
   instance.unmount();
 });
