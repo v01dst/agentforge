@@ -123,6 +123,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@agentforge-oss/models':
+        specifier: workspace:*
+        version: link:../models
       '@agentforge-oss/tools':
         specifier: workspace:*
         version: link:../tools
