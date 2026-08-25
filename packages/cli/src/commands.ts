@@ -16,7 +16,7 @@ import { buildModelReport, createSessionFromModule, drainStream, formatTurnFoote
 import { addProviderEntry, readProviderEntries, removeProviderEntry, type ProviderEntry } from './providers-store.js';
 import type { AgentForgeConfig, ChatSession, NamedEntry, ParsedCli, RunnableModule } from './types.js';
 
-export const VERSION = '0.3.1';
+export const VERSION = '0.0.1';
 
 export const HELP = `AgentForge ${VERSION}
 
@@ -39,6 +39,9 @@ Commands:
   workflows          List configured workflows
   plugins [sub]      List plugins, or manage registrations:
                        add <path> | remove <path>
+  mcp [sub]          List MCP servers, or manage them:
+                       add <name> [--cwd <dir>] -- <command> [args...]
+                       remove <name> | tools [server]
   doctor             Check the local AgentForge project
   connect <provider> Configure a provider credential or endpoint
 
@@ -565,6 +568,61 @@ export async function pluginsRemoveCommand(path: string | undefined): Promise<nu
   await writeExtensions({ ...extensions, plugins: next });
   success(`Plugin removed: ${absolute}`);
   return 0;
+}
+
+/** MCP server management: list/add/remove against .agentforge/extensions.json. */
+export async function mcpCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
+  const [sub, name] = args;
+  const extensions = await readExtensions();
+  const servers = extensions.mcp?.servers ?? [];
+  if (!sub || sub === 'list' || sub === 'ls') {
+    if (flagBoolean(flags, 'json')) { printJson({ servers }); return 0; }
+    heading('AgentForge MCP servers');
+    if (!servers.length) { hint('No MCP servers configured. Add one with `agentforge mcp add <name> -- <command> [args...]`.'); return 0; }
+    for (const server of servers) info(`  ${server.name}  ${JSON.stringify(server.command)}${server.cwd ? `  cwd=${server.cwd}` : ''}`);
+    return 0;
+  }
+  const { writeExtensions } = await import('./extensions/store.js');
+  if (sub === 'add') {
+    if (!name) throw new Error('Missing name. Usage: agentforge mcp add <name> [--cwd <dir>] -- <command> [args...].');
+    if (servers.some((server) => server.name === name)) throw new Error(`MCP server already configured: ${name}`);
+    const separator = args.indexOf('--');
+    // Tokens after the separator are the launch command; strip stray separators
+    // so inputs like `-- --` can never register an empty/garbage command.
+    const command = (separator === -1 ? args.slice(2) : args.slice(separator + 1)).filter((token) => token && token !== '--');
+    if (!command.length || command[0]?.startsWith('-')) {
+      throw new Error('Missing command. Usage: agentforge mcp add <name> [--cwd <dir>] -- <command> [args...].');
+    }
+    const cwdFlag = flagString(flags, 'cwd');
+    const next = [...servers, { name, command, ...(cwdFlag ? { cwd: resolve(process.cwd(), cwdFlag) } : {}) }];
+    await writeExtensions({ ...extensions, mcp: { servers: next } });
+    success(`MCP server registered: ${name} → ${JSON.stringify(command)}${cwdFlag ? ` (cwd: ${resolve(process.cwd(), cwdFlag)})` : ''}`);
+    hint('The exact executable above will be launched when a session starts. Verify with `agentforge doctor`.');
+    return 0;
+  }
+  if (sub === 'remove' || sub === 'rm') {
+    if (!name) throw new Error('Missing name. Usage: agentforge mcp remove <name>.');
+    const next = servers.filter((server) => server.name !== name);
+    if (next.length === servers.length) { warn(`MCP server not configured: ${name}`); return 1; }
+    await writeExtensions({ ...extensions, mcp: { servers: next } });
+    success(`MCP server removed: ${name}`);
+    return 0;
+  }
+  if (sub === 'tools') {
+    const target = name ? servers.filter((server) => server.name === name) : servers;
+    if (name && !target.length) throw new Error(`MCP server not configured: ${name}`);
+    const { projectMcpTools } = await import('./mcp/bridge.js');
+    const scopedExtensions: typeof extensions = { ...extensions, mcp: { servers: target } };
+    const started = Date.now();
+    const { tools, failures } = await projectMcpTools(scopedExtensions);
+    if (flagBoolean(flags, 'json')) { printJson({ tools: tools.map((tool) => (tool as { name: string }).name), failures }); return failures.length ? 1 : 0; }
+    heading('MCP tools');
+    for (const tool of tools) info(`  ${(tool as { name: string }).name}`);
+    for (const failure of failures) warn(`! ${failure.server}: ${failure.reason}`);
+    hint(`${tools.length} tool(s) from ${target.length - failures.length} server(s) in ${Date.now() - started}ms`);
+    return failures.length && !tools.length ? 1 : 0;
+  }
+  throw new Error(`Unknown mcp subcommand: ${sub}. Usage: agentforge mcp [list|add|remove|tools].`);
 }
 
 export async function connectCommand(provider: string | undefined, flags: Record<string, string | boolean>): Promise<number> {

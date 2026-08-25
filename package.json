@@ -1,6 +1,6 @@
 {
   "name": "agentforge",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": true,
   "description": "Model-agnostic AI agent runtime and visual workflow platform.",
   "license": "Apache-2.0",

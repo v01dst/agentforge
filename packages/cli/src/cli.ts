@@ -1,5 +1,5 @@
 import { formatError, error, info } from './output.js';
-import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, modelsCommand, pluginsAddCommand, pluginsCommand, pluginsRemoveCommand, providersCommand, runCommand, testCommand } from './commands.js';
+import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, mcpCommand, modelsCommand, pluginsAddCommand, pluginsCommand, pluginsRemoveCommand, providersCommand, runCommand, testCommand } from './commands.js';
 import type { ParsedCli } from './types.js';
 
 export function parseArgs(argv: string[]): ParsedCli {
@@ -62,6 +62,7 @@ export async function execute(argv: string[] = process.argv.slice(2)): Promise<n
       if (sub && !['list', 'ls', 'l'].includes(sub)) throw new Error(`Unknown plugins subcommand: ${sub}. Usage: agentforge plugins [list|add|remove].`);
       return await pluginsCommand(parsed.flags);
     }
+    case 'mcp': return await mcpCommand(parsed.args, parsed.flags);
     default: throw new Error(`Unknown command: ${parsed.command}. Run agentforge --help.`);
   }
 }

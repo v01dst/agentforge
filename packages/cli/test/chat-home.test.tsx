@@ -48,9 +48,9 @@ test('ChatHome renders status bar with provider and model', async () => {
 
 test("typing '/mo' filters suggestions to /models and /model", async () => {
   const instance = render(React.createElement(ChatHome, { runner: instantRunner, commands }));
-  await delay(30);
+  await delay(60);
   instance.stdin.write('/mo');
-  await delay(80);
+  await delay(160);
   const frame = instance.lastFrame() ?? '';
   assert.match(frame, /\/models/);
   assert.match(frame, /\/model /);

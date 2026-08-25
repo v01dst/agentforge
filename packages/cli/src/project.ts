@@ -8,7 +8,7 @@ const files: Record<string, string> = {
   "packageManager": "pnpm@9.15.5",
   "type": "module",
   "scripts": { "run": "agentforge run src/agent.ts", "chat": "agentforge chat src/agent.ts", "start": "agentforge", "typecheck": "tsc --noEmit", "test": "tsx --test test/*.test.ts" },
-  "dependencies": { "@agentforge-oss/cli": "^0.3.1", "@agentforge-oss/core": "^0.3.1", "@agentforge-oss/models": "^0.3.1", "zod": "^3.24.1" },
+  "dependencies": { "@agentforge-oss/cli": "^0.0.1", "@agentforge-oss/core": "^0.0.1", "@agentforge-oss/mcp": "^0.0.1", "@agentforge-oss/models": "^0.0.1", "zod": "^3.24.1" },
   "devDependencies": { "@types/node": "^22.10.2", "tsx": "^4.19.2", "typescript": "^5.7.2" }
 }
 `,
@@ -183,12 +183,14 @@ export function createSession(): AgentForgeSession {
 }
 
 /** Build the project agent. Used by one-shot runs, chat sessions, and headless tests.
- *  Plugin tools/instructions registered in .agentforge/extensions.json are merged here. */
+ *  Plugin and MCP tools registered in .agentforge/extensions.json are merged here. */
 export async function createAgent(): Promise<Agent> {
   const model = await loadModel();
   const { pluginContributions } = await import('@agentforge-oss/cli');
-  const { tools, instructions } = await pluginContributions();
-  return new Agent({ name: agentName, model, instructions: ['Be concise and factual.', ...instructions].join('\n'), tools });
+  const { projectMcpTools } = await import('@agentforge-oss/cli');
+  const { tools: pluginTools, instructions } = await pluginContributions();
+  const { tools: mcpTools } = await projectMcpTools();
+  return new Agent({ name: agentName, model, instructions: ['Be concise and factual.', ...instructions].join('\n'), tools: [...pluginTools, ...mcpTools] });
 }
 
 export async function run(input = 'Hello from AgentForge'): Promise<unknown> {

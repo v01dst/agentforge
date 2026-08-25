@@ -4,6 +4,25 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### Versioning
+
+- The project is now branded **AgentForge v0.01** (`0.0.1`): a deliberate restart of the public version line. All workspace packages, scaffold templates, and the CLI banner report `0.0.1`.
+
+### Extensions: plugins, skills, MCP (new)
+
+- **Plugins** — local modules registered in `.agentforge/extensions.json` that contribute tools and/or system instructions to project agents. Fault-tolerant loader reports per-path failures; `agentforge plugins list|add|remove` manages registrations (add probes the module before writing); `/plugins` slash command lists contributions; doctor surfaces every plugin with its tools. Scaffolds ship a working example plugin plus registration.
+- **MCP** — new `@agentforge-oss/mcp` package: stdio client over `@modelcontextprotocol/sdk`, JSON-Schema→Zod input adaptation, tools namespaced as `<server>.<tool>` with restrictive `mcp:<server>` permissions and 60s timeouts. `agentforge mcp list|add|remove|tools` manages servers in `.agentforge/extensions.json`; `add` prints exactly which executable will be launched (security surfacing). Scaffolded agents merge plugin + MCP tool contributions automatically.
+- **Skills** (from earlier unreleased work) continue to load from `.agentforge/skills/*.md`.
+
+### Chat UI
+
+- Live tool-call activity during turns (running spinners replaced by done-markers with durations, capped at 8 events).
+- Ranked fuzzy matching in the command palette (prefix > word-boundary > substring > subsequence).
+
+## [0.3.1] and earlier
+
+See git history for the 0.2.x–0.3.x line (chat-first TUI architecture, global/session mode, real model runner, provider endpoints, playground persistence).
+
 ### Custom and proxy model endpoints
 
 - `@agentforge/models` gains first-class proxy support: a new `openai-compatible` provider kind (OpenRouter, Together, LM Studio, Ollama, vLLM, any OpenAI-shaped endpoint), plus `createConfiguredModel(definition)` / `isProviderReady()` / `resolveApiKey()` helpers built on a typed `ProviderDefinition { protocol, model, baseUrl, apiKeyEnv }`. All four protocols (`openai`, `anthropic`, `google`, `openai-compatible`) accept custom `baseUrl`, so Anthropic/Gemini-style relays work too. Credentials are resolved from environment variables only.

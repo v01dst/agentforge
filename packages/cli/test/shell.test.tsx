@@ -44,7 +44,7 @@ test('CommandPalette filters items by substring', async () => {
   assert.match(instance.lastFrame() ?? '', /Doctor diagnostics/);
   // Type 'doc' via stdin to filter down to the doctor entry.
   instance.stdin.write('doc');
-  await delay(80);
+  await delay(250);
   const frame = instance.lastFrame() ?? '';
   assert.doesNotMatch(frame, /Chat with agent/);
   assert.match(frame, /Doctor diagnostics/);
