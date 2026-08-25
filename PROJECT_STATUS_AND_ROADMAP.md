@@ -1,6 +1,6 @@
 # AgentForge: Project Status, Product Definition, and Roadmap
 
-Last updated: 2026-08-24 (v0.1.0 release preparation)  
+Last updated: 2026-08-25 (AgentForge v0.01 — extension platform landed)
 Current version: `0.1.0`  
 Repository status: active development / experimental
 
@@ -953,6 +953,21 @@ Still open for B-quality polish: durable named sessions/resume (Phase 6), provid
 - [ ] Add Git-aware diff summaries surfaced in chat turns.
 
 Remaining Phase 4 follow-ups: token-aware context selection, `.gitignore`-driven exclusion config surface, adversarial security tests for the new tools.
+
+### Milestone E2: Extension Platform (plugins, skills, MCP) — landed (2026-08-25, v0.0.1)
+
+The project was rebranded **AgentForge v0.01** (`0.0.1`) alongside this work.
+
+- [x] Plugin contract (`AgentForgePlugin`: tools + instructions) with fault-tolerant loader and per-path failure reporting (`packages/cli/src/plugins/plugins.ts`).
+- [x] `agentforge plugins list|add|remove` backed by `.agentforge/extensions.json`; `add` probe-loads the module before persisting.
+- [x] `/plugins` chat slash command listing contributions.
+- [x] Doctor surfaces each plugin's tools/instructions plus the exact MCP launch commands (security visibility).
+- [x] New `@agentforge-oss/mcp` package: stdio client over `@modelcontextprotocol/sdk`, JSON-Schema→Zod input subset, `<server>.<tool>` namespacing, restrictive `mcp:<server>` permissions, 60s timeouts.
+- [x] `agentforge mcp list|add|remove|tools`; `add` rejects separator/flag-only commands and prints exactly what will be launched.
+- [x] Scaffold ships example plugin + extensions registration; generated agents merge plugin + MCP tool contributions at build time.
+- [x] Chat UI: live tool-call events (running → done markers with durations, capped) and ranked fuzzy palette matching.
+- [ ] End-to-end verification against a real published/community MCP server over stdio (unit + in-memory transport covered; real npx-server run pending on a network-capable machine).
+- [ ] MCP connections closed deterministically on turn cancel mid-stream (currently process-exit hooks).
 
 ### Milestone D: UI Represents Reality
 
