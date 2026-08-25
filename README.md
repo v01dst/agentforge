@@ -1,154 +1,277 @@
+<div align="center">
+
+<img src="docs/agentforge-banner.svg" alt="AgentForge" width="100%" />
+
 # AgentForge
 
-AgentForge is an open-source, model-agnostic TypeScript framework for building, executing, testing, and observing AI agents and visual workflows.
+**A model-agnostic agent runtime, terminal coding agent, and extension platform — in one TypeScript monorepo.**
 
-The project keeps provider-specific code behind adapters, treats tools as typed capabilities, and exposes the same runtime to the SDK, CLI, and playground.
+[![version](https://img.shields.io/badge/version-0.0.1-818cf8)](CHANGELOG.md)
+[![node](https://img.shields.io/badge/node-%E2%89%A520.11-339933?logo=node.js&logoColor=white)](package.json)
+[![pnpm](https://img.shields.io/badge/pnpm-9-F69220?logo=pnpm&logoColor=white)](pnpm-workspace.yaml)
+[![license](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
+[![tests](https://img.shields.io/badge/tests-passing-brightgreen)](.github/workflows)
+[![discord](https://img.shields.io/badge/discord-9p.1-5865F2?logo=discord&logoColor=white)](#-community)
+
+*Chat-first TUI · streaming turns · plugins · MCP servers · skills · permission-gated coding tools*
+
+</div>
+
+---
+
+## Why AgentForge?
+
+Most agent CLIs lock you into one provider and one way of working. AgentForge is built around three ideas:
+
+1. **The runtime is separate from the product.** A typed agent loop (`@agentforge-oss/core`) with tools, retries, cancellation, and events — consumed by the CLI, the SDK, and the web playground alike.
+2. **Extensions are first-class.** Plugins, MCP servers, and markdown skills drop into `.agentforge/extensions.json` and merge into every session automatically.
+3. **Dangerous things ask first.** File edits and shell commands run through workspace-scoped tools behind explicit permission modes.
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│  note › AgentForge ready — type a message, or / for commands │
+│  you   › refactor the login flow and run the tests           │
+│  ⠙ working… (Ctrl-C to cancel)                               │
+│  ✓ read_file   src/auth/login.ts (12ms)                      │
+│  ✓ apply_patch src/auth/login.ts (48ms)                      │
+│  ✓ run_tests    (3.2s)                                       │
+│  agent › Done — 3 files touched, all 14 tests pass.          │
+│ ╭──────────────────────────────────────────────────╮         │
+│ │ ❯ ▏                                              │         │
+│ ╰──────────────────────────────────────────────────╯         │
+│ claude-sonnet-4-5 · plugins: 2 · mcp: 1 · 12.4k tok          │
+└──────────────────────────────────────────────────────────────┘
+```
 
 ## Install
 
+> Packages ship to npm under the `@agentforge-oss` scope starting with `v0.0.1`.
+
 ```bash
-# Install the CLI globally
+# once published
 npm install -g @agentforge-oss/cli
-agentforge init my-agent
-cd my-agent
-agentforge chat
+
+# today, from source
+git clone https://github.com/v01dst/agentforge.git
+cd agentforge && pnpm install && pnpm build
+node packages/cli/dist/bin.js --help
 ```
 
-> **Note:** the npm package is `@agentforge-oss/cli` (the `agentforge` name on npm is blocked by similarity rules). Installing it globally still provides the `agentforge` binary.
+Scaffold your first project (works offline against a deterministic mock model):
 
-## Status
+```bash
+agentforge init my-agent        # or: agentforge init . inside an existing repo
+cd my-agent
+pnpm install
+pnpm exec agentforge chat       # interactive TUI
+pnpm run run                     # headless one-shot
+```
 
-Version `0.2.0` adds the chat-first interactive TUI (`agentforge` launches straight into it) on top of the 0.1.0 runtime. Core APIs are usable for local development and testing; provider adapters, persistence, and the playground are evolving and may change before `1.0.0`.
+Connect a real model when you're ready:
+
+```bash
+export OPENAI_API_KEY=sk-...     # or ANTHROPIC_API_KEY / GOOGLE_API_KEY
+agentforge providers add openrouter \
+  --protocol openai-compatible --base-url https://openrouter.ai/api/v1 \
+  --model anthropic/claude-sonnet-4.5 --api-key-env OPENROUTER_API_KEY
+```
+
+## What's inside
+
+| Surface | Package | What it gives you |
+| --- | --- | --- |
+| Agent runtime | [`@agentforge-oss/core`](packages/core) | Typed agent loop, tool calling, retries, abort/cancellation, structured output, event bus |
+| Model adapters | [`@agentforge-oss/models`](packages/models) | OpenAI · Anthropic · Gemini · OpenAI-compatible (OpenRouter, Ollama, vLLM…) · deterministic mock |
+| Tools | [`@agentforge-oss/tools`](packages/tools) | Zod-typed tool framework + filesystem, HTTP, shell, repository, patch-editing tools |
+| Workflows | [`@agentforge-oss/workflows`](packages/workflows) | Graph execution with branching, parallel steps, retries |
+| Memory & storage | [`memory`](packages/memory) · [`storage`](packages/storage) | Pluggable memory providers, run persistence |
+| Observability | [`@agentforge-oss/observability`](packages/observability) | Structured events, redaction-aware sinks |
+| MCP client | [`@agentforge-oss/mcp`](packages/mcp) | stdio MCP servers → native agent tools |
+| CLI + TUI | [`@agentforge-oss/cli`](packages/cli) | Everything below |
+| Playground | [`apps/playground`](apps/playground) | Web UI over the same runtime and run store |
+
+## The terminal experience
+
+```bash
+agentforge            # chat-first TUI (global mode, or project mode in a repo)
+agentforge chat       # explicit interactive session (--plain for pipes/CI)
+agentforge run        # one headless turn — perfect for scripting
+agentforge doctor     # environment, config, plugins, MCP — with security surfacing
+agentforge models list
+agentforge providers add <name> --protocol openai-compatible --base-url …
+agentforge inspect <run-id>
+```
+
+Inside a session:
+
+| | |
+| --- | --- |
+| `/help` `/status` `/clear` `/exit` | session basics |
+| `/models` `/model <name>` `/providers` `/connect <p>` | switch models mid-flight |
+| `/tools` `/workflows` `/runs` `/inspect <id>` | inspect what the agent can do and did |
+| `/mode [read-only\|ask\|workspace-write\|trusted]` | permission posture for edits & commands |
+| `/plugins` `/skills` | browse registered extensions |
+
+Streaming turns show live token output; Ctrl-C cancels the current turn, twice exits. Tool calls render inline as they complete. Non-TTY usage degrades to clean plain-text (pipes, CI, `echo "hi" | agentforge chat`).
+
+## Extensions: plugins · MCP · skills
+
+Everything lives in one file — `.agentforge/extensions.json`, created by `agentforge init`:
+
+```json
+{
+  "plugins": ["./plugins/example.ts"],
+  "mcp": {
+    "servers": [
+      { "name": "files", "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "."] }
+    ]
+  }
+}
+```
+
+### Plugins — local TypeScript modules
+
+```ts
+// plugins/example.ts
+import { z } from 'zod';
+import type { AgentForgePlugin } from '@agentforge-oss/cli';
+
+const plugin: AgentForgePlugin = {
+  name: 'example',
+  instructions: 'Prefer concise answers.',
+  tools: [{
+    name: 'greet',
+    description: 'Return a friendly greeting',
+    inputSchema: z.object({ name: z.string() }),
+    permissions: [],
+    async execute({ name }) { return { text: `Hello, ${name}!` }; },
+  }],
+};
+
+export default plugin;
+```
+
+```bash
+agentforge plugins add ./plugins/example.ts   # probe-loads before registering
+agentforge plugins list                        # shows each plugin's tools
+```
+
+### MCP — any stdio server becomes native tools
+
+```bash
+agentforge mcp add files -- npx -y @modelcontextprotocol/server-filesystem .
+agentforge mcp tools files      # verify connectivity + list adapted tools
+```
+
+Tools arrive namespaced (`files.read_file`), schema-validated, tagged with restrictive
+`mcp:<server>` permissions, and surfaced in `doctor` — including the exact command that
+will be launched, so nothing runs invisibly on your machine.
+
+### Skills — markdown with frontmatter
+
+```markdown
+---
+name: code-review
+description: Review changes carefully before proposing them
+---
+When reviewing code, check edge cases, error handling, and tests first…
+```
+
+Drop files into `.agentforge/skills/`, toggle with `/skills <name>`. Selected skill bodies
+are injected into the system context for new turns.
+
+## Safe by default
+
+Repository work goes through seven policy-wrapped coding tools — `list_files`,
+`read_file`, `search_text`, `apply_patch`, `inspect_git_diff`, `run_command`, `run_tests` —
+scoped to the workspace root and gated by four permission modes:
+
+| Mode | Reads | Edits | Commands |
+| --- | --- | --- | --- |
+| `read-only` | ✅ | ❌ | ❌ |
+| `ask` *(default)* | ✅ | 🔔 approve | 🔔 approve |
+| `workspace-write` | ✅ | ✅ in-root | 🔔 allowlisted only |
+| `trusted` | ✅ | ✅ | ✅ |
+
+Credentials never touch disk through the CLI, API keys are redacted from logs and errors,
+and provider credentials resolve from environment variables only.
 
 ## Architecture
 
 ```mermaid
-graph TD
-  User --> CLI
-  User --> Playground
-  CLI --> Core
-  Playground --> Core
-  Core --> Models[Model providers]
-  Core --> Tools[Tool runtime]
-  Core --> Workflows[Workflow engine]
-  Core --> Memory[Memory providers]
-  Core --> Observability[Telemetry]
-  Observability --> Storage[Run storage]
+flowchart LR
+    subgraph surfaces
+        CLI[CLI / TUI]
+        PG[Playground]
+        SDK[SDK]
+    end
+    subgraph platform
+        AG[Agents]
+        WF[Workflows]
+        PL[Plugins]
+        MCP[MCP bridge]
+        SK[Skills]
+    end
+    subgraph foundation
+        CORE[core runtime]
+        MODELS[model adapters]
+        TOOLS[policy tools]
+        MEM[memory / storage / observability]
+    end
+    CLI --> AG & WF
+    PG --> SDK
+    SDK --> AG
+    PL & MCP & SK --> AG
+    AG & WF --> CORE
+    MODELS & TOOLS & MEM --> CORE
 ```
 
-The monorepo is split into small packages:
+Strict TypeScript end-to-end · Zod at every runtime boundary · typed errors · cancellation preserved throughout · deterministic mocks for tests.
 
-- `@agentforge-oss/core`: agent runtime, events, and public types
-- `@agentforge-oss/models`: provider adapters and deterministic mock models
-- `@agentforge-oss/tools`: typed tool definitions and built-in tools
-- `@agentforge-oss/workflows`: graph execution and workflow nodes
-- `@agentforge-oss/memory`: conversation and long-term memory providers
-- `@agentforge-oss/observability`: structured logs and event sinks
-- `@agentforge-oss/storage`: execution-history persistence
-- `agentforge`: the `agentforge` developer CLI
-
-## Quick start
-
-```bash
-pnpm install
-pnpm build
-pnpm test
-pnpm --filter agentforge dev -- --help
-```
-
-Install the CLI globally, create a project, install its dependencies, and launch the interactive agent:
-
-```bash
-npm install -g @agentforge-oss/cli
-agentforge init my-agent
-cd my-agent
-npm install
-agentforge
-```
-
-For a project-local CLI installation, use `npx agentforge` or `npm start`; npm does not add local package binaries to the global shell PATH.
-
-No paid API account is required for the examples. They use the deterministic mock model. Provider adapters read credentials only from environment variables:
-
-```bash
-export OPENAI_API_KEY=...
-export ANTHROPIC_API_KEY=...
-export GOOGLE_API_KEY=...
-```
-
-## Basic agent
-
-```ts
-import { Agent } from '@agentforge-oss/core';
-import { MockModel } from '@agentforge-oss/models';
-
-const agent = new Agent({
-  name: 'assistant',
-  model: new MockModel({ responses: ['AgentForge is ready.'] }),
-  instructions: 'Answer concisely and honestly.',
-});
-
-const result = await agent.run('What is AgentForge?');
-console.log(result.output);
-```
-
-## Typed tools
-
-```ts
-import { defineTool } from '@agentforge-oss/tools';
-import { z } from 'zod';
-
-const calculator = defineTool({
-  name: 'calculator',
-  description: 'Evaluate a simple arithmetic expression.',
-  input: z.object({ expression: z.string().min(1) }),
-  execute: async ({ expression }) => ({ expression, value: 42 }),
-});
-```
-
-Tools validate input at the runtime boundary and can declare timeouts, retries, permissions, and lifecycle hooks. Shell and filesystem capabilities are opt-in and should be isolated in production.
-
-## Workflows
-
-Workflow graphs compose input, agent, model, tool, transform, condition, parallel, approval, and output nodes. See [`examples/showcase/research-workflow.ts`](examples/showcase/research-workflow.ts) for a deterministic end-to-end graph.
-
-## Observability and memory
-
-Every run receives a unique run ID and emits structured events such as `agent.started`, `model.completed`, `tool.completed`, and `agent.failed`. Plug in a console sink for local development or a storage-backed sink for history. Memory is provider-based; the in-memory implementation is included and PostgreSQL is available behind the storage package.
-
-## CLI
+## Repository map
 
 ```text
-agentforge init <name>       Scaffold a project
-agentforge dev               Start the local development server
-agentforge                    Start interactive chat in the current project
-agentforge run <entry>       Execute an agent or workflow entrypoint
-agentforge chat <entry>      Start interactive chat explicitly
-agentforge connect <provider> Connect a built-in or custom provider
-agentforge test              Run deterministic agent tests
-agentforge inspect <run-id>  Inspect a stored run
-agentforge providers         List configured model providers
-agentforge tools             List available tools
-agentforge workflows         List workflow definitions
+agentforge/
+├── apps/playground/        web console over the same runtime
+├── packages/
+│   ├── core/               agent loop, contracts, events
+│   ├── models/             openai · anthropic · google · openai-compatible · mock
+│   ├── tools/              typed tool framework + built-ins
+│   ├── workflows/          graph runtime
+│   ├── memory/ storage/ observability/
+│   ├── mcp/                MCP stdio client → ToolLike adapter
+│   ├── cli/                TUI, commands, extensions loader
+│   └── sdk/                consolidated public exports
+├── examples/showcase/      runnable provider/tool/workflow examples
+├── docs/                   assets
+└── PROJECT_STATUS_AND_ROADMAP.md   ← the honest, living status doc
 ```
-
-Inside chat, use `/help`, `/connect <provider-or-module>`, `/providers`, `/status`, `/model <name>`, `/clear`, and `/exit`. Custom provider modules may export a `ModelProvider` as `default`/`model`, or a `createProvider(options)`/`createModel(options)` factory. Configuration is discovered from `agentforge.config.ts`; credentials supplied with `connect` remain process-local and are never printed.
-
-## Security
-
-AgentForge validates inputs and outputs, enforces execution limits, redacts common secret formats in logs, and requires explicit opt-in for dangerous tools. HTTP tools should enforce an allowlist and block private network targets to reduce SSRF risk. Review [`SECURITY.md`](SECURITY.md) before enabling shell execution in an untrusted process.
 
 ## Development
 
 ```bash
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
+pnpm install
+pnpm build          # all packages
+pnpm test           # deterministic suites (no network)
+pnpm typecheck && pnpm lint
 ```
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for package boundaries, tests, and pull requests. The roadmap tracks provider parity, durable workflow persistence, and playground improvements.
+See [AGENTS.md](AGENTS.md) for contributor conventions and [CONTRIBUTING.md](CONTRIBUTING.md)
+for PR expectations. The roadmap is maintained as a truthful status document — read
+[§15 Near-Term Work Plan](PROJECT_STATUS_AND_ROADMAP.md) before picking up an issue.
+
+## Status
+
+AgentForge **v0.01** is an experimental foundation that already does real work:
+multi-turn streaming chat, repository-aware tools behind permissions, provider switching,
+plugins/MCP/skills, run inspection, and a playground — verified by ~200 deterministic tests.
+Not yet production-stable; APIs may change before `0.1`.
+
+## Community
+
+- **Discord:** [`9p.1`](https://discord.com) — say hi, share agents, ask questions.
+- **Issues:** [github.com/v01dst/agentforge/issues](https://github.com/v01dst/agentforge/issues)
 
 ## License
 
-AgentForge is released under the Apache License 2.0. See [`LICENSE`](LICENSE).
+[Apache-2.0](LICENSE)

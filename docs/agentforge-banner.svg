@@ -1,0 +1,36 @@
+<svg width="1200" height="300" viewBox="0 0 1200 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AgentForge">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0b1020"/>
+      <stop offset="0.55" stop-color="#101a33"/>
+      <stop offset="1" stop-color="#0b1020"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="240" y1="60" x2="960" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="0.5" stop-color="#818cf8"/>
+      <stop offset="1" stop-color="#f472b6"/>
+    </linearGradient>
+    <linearGradient id="line" x1="80" y1="150" x2="1120" y2="150" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#818cf8" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#f472b6" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="300" rx="18" fill="url(#bg)"/>
+  <rect x="1.5" y="1.5" width="1197" height="297" rx="16.5" stroke="#818cf8" stroke-opacity="0.25"/>
+  <line x1="80" y1="150" x2="1120" y2="150" stroke="url(#line)" stroke-width="2"/>
+  <g transform="translate(600 118)">
+    <!-- anvil -->
+    <path d="M-46 44 L46 44 L38 32 L-38 32 Z" fill="url(#accent)" opacity="0.95"/>
+    <path d="M-30 32 C-52 26 -58 12 -34 10 L34 10 C58 12 52 26 30 32 Z" fill="url(#accent)"/>
+    <path d="M34 14 C50 14 56 8 54 2 C48 8 42 8 34 8 Z" fill="url(#accent)" opacity="0.85"/>
+    <rect x="-10" y="44" width="20" height="10" rx="2" fill="url(#accent)" opacity="0.8"/>
+    <!-- hammer spark -->
+    <circle cx="70" cy="-6" r="3.4" fill="#fbbf24"/>
+    <circle cx="82" cy="-18" r="2.4" fill="#f472b6"/>
+    <circle cx="64" cy="-24" r="2" fill="#22d3ee"/>
+  </g>
+  <text x="600" y="196" text-anchor="middle" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="64" font-weight="700" letter-spacing="10" fill="#e5e7eb">AGENTFORGE</text>
+  <text x="600" y="238" text-anchor="middle" font-family="'JetBrains Mono',Menlo,Consolas,monospace" font-size="19" letter-spacing="3" fill="#94a3b8">forge agents · plugins · mcp · workflows</text>
+  <text x="984" y="278" text-anchor="end" font-family="'JetBrains Mono',Menlo,Consolas,monospace" font-size="15" letter-spacing="2" fill="#64748b">v0.01</text>
+</svg>

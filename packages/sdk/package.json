@@ -47,5 +47,8 @@
   "engines": {
     "node": ">=20.11"
   },
-  "author": "v01dst"
+  "author": "v01dst",
+  "publishConfig": {
+    "access": "public"
+  }
 }
