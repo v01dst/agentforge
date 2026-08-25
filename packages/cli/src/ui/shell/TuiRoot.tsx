@@ -13,6 +13,10 @@ export interface TuiRootProps {
   runner: TurnRunner;
   provider?: string;
   model?: string;
+  /** Session mode: 'global' when no project is detected. */
+  mode?: 'global' | 'project';
+  /** Detected project name (project mode only). */
+  projectName?: string;
   /** Unmount ink, run a stdout-printing command, wait for Enter, remount. */
   runSuspended: (fn: () => Promise<number>) => Promise<void>;
   onExit: () => void;
@@ -25,7 +29,7 @@ export interface TuiRootProps {
  * slash commands navigate to management screens or suspend into real CLI
  * commands. Screens are rendered in place; Esc returns to the conversation.
  */
-export function TuiRoot({ screens = {}, runner, provider, model, runSuspended, onExit }: TuiRootProps): React.ReactElement {
+export function TuiRoot({ screens = {}, runner, provider, model, mode, projectName, runSuspended, onExit }: TuiRootProps): React.ReactElement {
   const [activeScreen, setActiveScreen] = useState<{ id: SlashScreen | null; arg?: string }>({ id: null });
 
   const handlers: SlashHandlers = useMemo(() => ({
@@ -68,6 +72,7 @@ export function TuiRoot({ screens = {}, runner, provider, model, runSuspended, o
       onSlashCommand={onSlashCommand}
       provider={provider}
       model={model}
+      projectName={mode === 'project' ? projectName : undefined}
     />
   );
 }

@@ -38,9 +38,10 @@ function Spinner({ active }: { active: boolean }) {
   return <Text color="cyan">{SPINNER_FRAMES[frame]}</Text>;
 }
 
-function MessageRow({ role, text }: { role: 'user' | 'assistant' | 'system'; text: string }) {
+function MessageRow({ role, text }: { role: 'user' | 'assistant' | 'system' | 'tool'; text: string }) {
   if (role === 'user') return <Text><Text color="green">you   › </Text>{text}</Text>;
   if (role === 'system') return <Text dimColor>note  › {text}</Text>;
+  if (role === 'tool') return <Text dimColor>{'\u2699'} tool › {text}</Text>;
   return <Text><Text color="cyan">agent › </Text>{text}</Text>;
 }
 

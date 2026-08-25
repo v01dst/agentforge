@@ -1,9 +1,15 @@
 import { useCallback, useRef, useState } from 'react';
 import type { SkillSelection, TurnRunner } from './turn.js';
 
+export interface ToolMeta {
+  tool: string;
+  ms?: number;
+}
+
 export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'tool';
   text: string;
+  meta?: ToolMeta;
 }
 
 export interface TurnStatus {
@@ -17,6 +23,7 @@ export function useTurn(runner: TurnRunner) {
   const [streamingText, setStreamingText] = useState('');
   const [running, setRunning] = useState(false);
   const [status, setStatus] = useState<TurnStatus>({});
+  const [lastError, setLastError] = useState<string | undefined>(undefined);
   const controllerRef = useRef<AbortController | null>(null);
 
   const cancel = useCallback(() => { controllerRef.current?.abort(); }, []);
@@ -24,6 +31,7 @@ export function useTurn(runner: TurnRunner) {
   const send = useCallback(async (rawInput: string, skills: SkillSelection = []) => {
     const input = rawInput.trim();
     if (!input || controllerRef.current) return;
+    setLastError(undefined);
     setMessages((previous) => [...previous, { role: 'user', text: input }]);
     setStreamingText('');
     setRunning(true);
@@ -37,6 +45,13 @@ export function useTurn(runner: TurnRunner) {
           text += delta.text;
           setStreamingText(text);
         }
+        if (delta.tool) {
+          setMessages((previous) => [...previous, {
+            role: 'tool',
+            text: delta.tool?.name ?? '',
+            meta: { tool: delta.tool?.name ?? '', ms: delta.tool?.ms },
+          }]);
+        }
         if (delta.usage) setStatus((previous) => ({ ...previous, totalTokens: delta.usage?.totalTokens }));
         if (delta.runId) setStatus((previous) => ({ ...previous, runId: delta.runId }));
       }
@@ -45,8 +60,9 @@ export function useTurn(runner: TurnRunner) {
     } catch (error) {
       const message = controller.signal.aborted
         ? '[cancelled]'
-        : `Error: ${error instanceof Error ? error.message : String(error)}`;
-      setMessages((previous) => [...previous, { role: 'assistant', text: message }]);
+        : error instanceof Error ? error.message : String(error);
+      if (!controller.signal.aborted) setLastError(message);
+      setMessages((previous) => [...previous, { role: 'assistant', text: `Error: ${message}` }]);
     } finally {
       setStreamingText('');
       setRunning(false);
@@ -57,11 +73,12 @@ export function useTurn(runner: TurnRunner) {
   const clear = useCallback(() => {
     setMessages([]);
     setStatus({});
+    setLastError(undefined);
   }, []);
 
   const pushSystem = useCallback((text: string) => {
     setMessages((previous) => [...previous, { role: 'system', text }]);
   }, []);
 
-  return { messages, streamingText, running, status, send, cancel, clear, pushSystem };
+  return { messages, streamingText, running, status, lastError, send, cancel, clear, pushSystem };
 }

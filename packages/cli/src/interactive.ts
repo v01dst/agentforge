@@ -2,13 +2,12 @@ import type { ComponentType } from 'react';
 
 /**
  * Launch the interactive TUI when the terminal supports it.
- * `agentforge` with zero arguments always lands here on TTYs; non-TTY,
- * AGENTFORGE_HEADLESS=1 and TERM=dumb fall back to the classic CLI so
- * scripts and CI keep working unchanged.
+ * `agentforge` with zero arguments ALWAYS lands here on TTYs — from any
+ * directory, with or without a project. Non-TTY, AGENTFORGE_HEADLESS=1 and
+ * TERM=dumb fall back to the classic CLI so scripts and CI keep working.
  *
- * The TUI is chat-first: the default screen is a persistent conversation
- * with inline slash commands (/help, /models, /tools, /runs, ...) that open
- * interactive screens. All runtime logic is reused — nothing is duplicated.
+ * Startup order: branded splash → global/session runtime → project detection
+ * (non-fatal) → chat-first TUI.
  *
  * Returns true when the TUI was launched (caller should not continue).
  */
@@ -17,43 +16,76 @@ export async function launchInteractiveShell(): Promise<boolean> {
     return false;
   }
 
-  // Resolve the project entry (optional — the TUI works without one).
-  const { loadConfig } = await import('./config.js');
-  const { path: configPath, config } = await loadConfig({ required: false });
+  // Project detection is best-effort and never fatal: no project simply means
+  // global/session mode.
+  const { detectProject } = await import('./runtime-session.js');
+  const detection = await detectProject();
 
-  // Build the turn runner from the project entry when available; otherwise a
-  // stub runner that explains how to set up, so the TUI still opens anywhere.
   let runner: import('./ui/turn.js').TurnRunner;
-  if (config.entry) {
-    const { importEntry } = await import('./commands.js');
-    const { buildTurnRunner } = await import('./ui/turn.js');
-    const module = await importEntry(config.entry, { configPath });
-    runner = buildTurnRunner(module);
+  let projectName: string | undefined;
+  if (detection.found && detection.configPath) {
+    try {
+      const { importEntry } = await import('./commands.js');
+      const { loadConfig } = await import('./config.js');
+      const { buildTurnRunner } = await import('./ui/turn.js');
+      const { config } = await loadConfig({ required: false });
+      if (config.entry) {
+        const module = await importEntry(config.entry, { configPath: detection.configPath });
+        runner = buildTurnRunner(module);
+        projectName = config.name;
+      } else {
+        runner = await bareGuidanceRunner();
+      }
+    } catch {
+      runner = await bareGuidanceRunner();
+    }
   } else {
-    runner = async function* () {
-      yield {
-        text: configPath
-          ? 'No entrypoint is configured. Set `entry` in agentforge.config.ts or run /new to create a project.'
-          : 'No AgentForge project found here. Run /new to create one, or cd into a project directory.',
-      };
-    };
+    runner = await bareGuidanceRunner();
   }
 
-  const [{ render }, React, { TuiRoot }] = await Promise.all([
+  async function bareGuidanceRunner(): Promise<import('./ui/turn.js').TurnRunner> {
+    const { createBareRunner } = await import('./runtime-session.js');
+    return createBareRunner();
+  }
+
+  const [{ render }, React, slash, { TuiRoot }] = await Promise.all([
     import('ink'),
     import('react'),
+    import('./ui/slash/registry.js'),
     import('./ui/shell/TuiRoot.js'),
   ]);
-  const { ToolsScreen } = await import('./ui/slash/ToolsScreen.js');
-  const { SkillsScreen } = await import('./ui/slash/SkillsScreen.js');
-  const { WorkflowsScreen } = await import('./ui/slash/WorkflowsScreen.js');
-  const { RunsScreen } = await import('./ui/slash/RunsScreen.js');
-  const { AgentsScreen } = await import('./ui/slash/AgentsScreen.js');
+  const [{ ConnectWizard }, { DoctorScreen }, { ToolsScreen }, { SkillsScreen }, { WorkflowsScreen }, { RunsScreen }, { AgentsScreen }, { ModelsScreen }, { SettingsScreen }, { NewProjectScreen }, { RunScreen }] = await Promise.all([
+    import('./ui/slash/ConnectWizard.js'),
+    import('./ui/slash/DoctorScreen.js'),
+    import('./ui/slash/ToolsScreen.js'),
+    import('./ui/slash/SkillsScreen.js'),
+    import('./ui/slash/WorkflowsScreen.js'),
+    import('./ui/slash/RunsScreen.js'),
+    import('./ui/slash/AgentsScreen.js'),
+    import('./ui/screens/ModelsScreen.js'),
+    import('./ui/screens/SettingsScreen.js'),
+    import('./ui/screens/NewProjectScreen.js'),
+    import('./ui/screens/RunScreen.js'),
+  ]);
+  const { resolveActiveProvider } = await import('./global-config.js');
+  const resolution = await resolveActiveProvider();
 
-  const provider = process.env.AGENTFORGE_PROVIDER ?? config.provider ?? 'mock';
-  const model = process.env.AGENTFORGE_MODEL ?? (typeof config.model === 'string' ? config.model : config.model?.model);
+  const screens: Record<string, ComponentType> = {
+    tools: ToolsScreen as ComponentType,
+    skills: SkillsScreen as ComponentType,
+    workflows: WorkflowsScreen as ComponentType,
+    runs: RunsScreen as ComponentType,
+    agents: AgentsScreen as ComponentType,
+    models: ModelsScreen as ComponentType,
+    settings: SettingsScreen as ComponentType,
+    'new-project': NewProjectScreen as ComponentType,
+    run: RunScreen as ComponentType,
+    connect: ConnectWizard as ComponentType,
+    'doctor-result': DoctorScreen as ComponentType,
+  };
 
   let instance: ReturnType<typeof render>;
+  const rerender = (): void => instance.rerender(buildElement());
   const runSuspended = async (fn: () => Promise<number>): Promise<void> => {
     instance.unmount();
     try { await fn(); } finally {
@@ -65,25 +97,33 @@ export async function launchInteractiveShell(): Promise<boolean> {
       rerender();
     }
   };
-  const rerender = (): void => instance.rerender(buildElement());
-
-  const screens: Record<string, ComponentType> = {
-    tools: ToolsScreen as ComponentType,
-    skills: SkillsScreen as ComponentType,
-    workflows: WorkflowsScreen as ComponentType,
-    runs: RunsScreen as ComponentType,
-    agents: AgentsScreen as ComponentType,
-  };
 
   const buildElement = (): React.ReactElement =>
     React.createElement(TuiRoot as unknown as ComponentType<Record<string, unknown>>, {
       runner,
-      provider,
-      model,
+      provider: resolution.provider,
+      model: resolution.model ?? undefined,
       runSuspended,
       onExit: () => instance.unmount(),
-      screens,
+      screens: screens as never,
+      mode: detection.found ? 'project' : 'global',
+      projectName,
     });
+
+  // Branded startup splash (~600ms), then the persistent TUI.
+  const { StartupBanner } = await import('./ui/shell/StartupBanner.js');
+  await new Promise<void>((resolveSplash) => {
+    const splash = render(React.createElement(StartupBanner as unknown as ComponentType<Record<string, unknown>>, {
+      ms: 600,
+      onDone: () => {
+        splash.unmount();
+        resolveSplash();
+      },
+      provider: resolution.provider,
+      model: resolution.model ?? undefined,
+      modeLine: detection.found ? 'PROJECT MODE' : 'GLOBAL SESSION',
+    }));
+  });
 
   instance = render(buildElement());
   await instance.waitUntilExit();

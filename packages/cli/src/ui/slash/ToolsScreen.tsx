@@ -47,6 +47,7 @@ function toRows(configTools: readonly (string | NamedEntry)[], codingTools: read
 
 export function ToolsScreen({ onBack }: { onBack?: () => void }): React.ReactElement {
   const [rows, setRows] = useState<ToolRow[] | null>(null);
+  const [hasProjectConfig, setHasProjectConfig] = useState(true);
   const [selected, setSelected] = useState(0);
   const [lines, setLines] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -55,12 +56,17 @@ export function ToolsScreen({ onBack }: { onBack?: () => void }): React.ReactEle
     let alive = true;
     void (async () => {
       let configTools: readonly (string | NamedEntry)[] = [];
+      let foundProjectConfig = true;
       try {
         const loaded = await loadConfig({ required: false });
+        // config.tools may be undefined with no project — built-ins still render.
         configTools = loaded.config.tools ?? [];
+        foundProjectConfig = Boolean(loaded.path);
       } catch {
         configTools = [];
+        foundProjectConfig = false;
       }
+      if (alive) setHasProjectConfig(foundProjectConfig);
       let coding: PolicyTool[] = [];
       try {
         coding = createCodingTools();
@@ -103,6 +109,9 @@ export function ToolsScreen({ onBack }: { onBack?: () => void }): React.ReactEle
   return (
     <Box flexDirection="column" paddingX={1}>
       <Text bold>Tools</Text>
+      {!hasProjectConfig && rows !== null ? (
+        <Text dimColor>(no project config found — showing built-in coding tools only; run /new or /cd to load project tools)</Text>
+      ) : null}
       <Text dimColor>↑/↓ select · enter detail · t test invocation · Esc back</Text>
       <Box flexDirection="column" marginTop={1}>
         {rows === null

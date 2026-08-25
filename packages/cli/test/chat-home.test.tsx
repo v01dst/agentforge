@@ -1,8 +1,10 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import React from 'react';
+import { Text } from 'ink';
 import { render } from 'ink-testing-library';
 import { ChatHome, SLASH_COMMANDS, type SlashCommand } from '../src/ui/shell/ChatHome.js';
+import { Frame } from '../src/ui/shell/Frame.js';
 import type { TurnRunner } from '../src/ui/turn.js';
 
 const delay = (ms: number) => new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
@@ -96,5 +98,69 @@ test('Enter over a no-arg suggestion runs it; Esc dismisses menu keeping text', 
   instance.stdin.write('\r');
   await delay(60);
   assert.deepEqual(seen[1], ['connect', []]);
+  instance.unmount();
+});
+
+test('up-arrow recalls previous inputs; down-arrow returns toward the draft', async () => {
+  const instance = render(React.createElement(ChatHome, { runner: instantRunner, commands }));
+  await delay(30);
+  instance.stdin.write('first input');
+  await delay(40);
+  instance.stdin.write('\r');
+  await delay(150);
+  instance.stdin.write('second input');
+  await delay(40);
+  instance.stdin.write('\r');
+  await delay(150);
+  instance.stdin.write('\u001b[A'); // up arrow
+  await delay(60);
+  let frame = instance.lastFrame() ?? '';
+  assert.match(frame, /second input/);
+  instance.stdin.write('\u001b[A'); // up arrow again
+  await delay(60);
+  frame = instance.lastFrame() ?? '';
+  assert.match(frame, /first input/);
+  instance.stdin.write('\u001b[B'); // down arrow back
+  await delay(60);
+  frame = instance.lastFrame() ?? '';
+  assert.match(frame, /second input/);
+  instance.unmount();
+});
+
+test('Frame renders header brand, mode badge, version and footer hints', async () => {
+  const instance = render(React.createElement(Frame, {
+    mode: { kind: 'project', name: 'demo' },
+    version: '1.2.3',
+    provider: 'mock-provider',
+    model: 'agentforge-local',
+  }, React.createElement(Text, null, 'body-content')));
+  await delay(30);
+  const frame = instance.lastFrame() ?? '';
+  assert.match(frame, /AgentForge/);
+  assert.match(frame, /PROJECT: demo/);
+  assert.match(frame, /v1\.2\.3/);
+  assert.match(frame, /\[Enter\] send/);
+  assert.match(frame, /\[Ctrl\+K\] palette/);
+  assert.match(frame, /\[Ctrl\+C\]/);
+  assert.match(frame, /mock-provider/);
+  assert.match(frame, /agentforge-local/);
+  assert.match(frame, /body-content/);
+  instance.unmount();
+});
+
+test('tool-role messages render as dim tool-call lines with duration', async () => {
+  const toolRunner: TurnRunner = async function* () {
+    yield { tool: { name: 'web_search', ms: 1200 } };
+    yield { text: 'searched' };
+  };
+  const instance = render(React.createElement(ChatHome, { runner: toolRunner, commands }));
+  await delay(30);
+  instance.stdin.write('go');
+  await delay(40);
+  instance.stdin.write('\r');
+  await delay(200);
+  const frame = instance.lastFrame() ?? '';
+  assert.match(frame, /tool › web_search \(1\.2s\)/);
+  assert.match(frame, /searched/);
   instance.unmount();
 });

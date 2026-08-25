@@ -1,33 +1,192 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { buildSlashRegistry, dispatchSlash, parseSlashInput, slashCommandNames, type SlashHandlers } from '../src/ui/slash/registry.js';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import {
+  buildSlashRegistry,
+  dispatchSlash,
+  findCommand,
+  parseSlashInput,
+  slashCommandNames,
+  type CommandContext,
+  type RegisteredCommand,
+  type SlashScreen,
+} from '../src/ui/slash/registry.js';
 
 const EXPECTED_COMMANDS = [
   'help', 'connect', 'providers', 'models', 'model', 'tools', 'skills', 'agents',
   'workflows', 'runs', 'inspect', 'test', 'doctor', 'config', 'settings', 'clear',
-  'status', 'init', 'new', 'project', 'chat', 'exit',
+  'status', 'exit', 'version', 'reload', 'cd', 'new', 'chat',
 ];
 
-function stubHandlers(): SlashHandlers & { screens: Array<{ screen: string; arg?: string }>; system: string[] } {
-  const handlers = {
-    screens: [] as Array<{ screen: string; arg?: string }>,
-    system: [] as string[],
-    cleared: 0,
-    exits: 0,
-    openScreen: (screen: Parameters<SlashHandlers['openScreen']>[0], arg?: string) => { handlers.screens.push({ screen, arg }); },
-    runSuspended: async (fn: () => Promise<number>) => { await fn(); },
-    pushSystem: (text: string) => { handlers.system.push(text); },
-    clearConversation: () => { handlers.cleared += 1; },
-    exitRequested: () => { handlers.exits += 1; },
-  };
-  return handlers as typeof handlers & { cleared: number; exits: number };
+interface TestCtx extends CommandContext {
+  screens: Array<{ screen: SlashScreen; arg?: string }>;
+  system: string[];
+  cleared: number;
+  exits: number;
+  suspended: number;
+  models: string[];
+  refreshed: number;
 }
 
-test('registry contains every expected command', () => {
-  const registry = buildSlashRegistry(stubHandlers());
+function stubCtx(overrides: Partial<CommandContext> = {}): TestCtx {
+  const ctx: TestCtx = {
+    screens: [],
+    system: [],
+    cleared: 0,
+    exits: 0,
+    suspended: 0,
+    models: [],
+    refreshed: 0,
+    mode: () => 'global',
+    pushSystem: (text: string) => { ctx.system.push(text); },
+    clearConversation: () => { ctx.cleared += 1; },
+    exitRequested: () => { ctx.exits += 1; },
+    openScreen: (screen: SlashScreen, arg?: string) => { ctx.screens.push({ screen, arg }); },
+    runSuspended: async (fn: () => Promise<number>) => { ctx.suspended += 1; await fn(); },
+    setSessionModel: (model: string) => { ctx.models.push(model); },
+    refreshStatus: () => { ctx.refreshed += 1; },
+    ...overrides,
+  };
+  return ctx;
+}
+
+function byName(registry: readonly RegisteredCommand[]): Map<string, RegisteredCommand> {
+  return new Map(registry.map((entry) => [entry.name, entry]));
+}
+
+async function voidify(_value?: unknown): Promise<void> {
+  // dispatchSlash returns synchronously while handlers run async; drain the
+  // event loop so fire-and-forget handlers complete before assertions.
+  for (let i = 0; i < 20; i += 1) await new Promise<void>((resolveTick) => setTimeout(resolveTick, 10));
+}
+
+test('every registered command has a non-empty handler function', () => {
+  const registry = buildSlashRegistry(stubCtx());
+  assert.ok(registry.length > 0);
+  for (const entry of registry) {
+    assert.equal(typeof entry.run, 'function', `/${entry.name} has no run()`);
+    assert.equal(typeof entry.action, 'function', `/${entry.name} has no action()`);
+    assert.ok(entry.run.length >= 0);
+    assert.ok(entry.name.length > 0 && entry.description.length > 0);
+    for (const alias of entry.aliases ?? []) {
+      assert.ok(alias.length > 0, `/ ${entry.name} has an empty alias`);
+    }
+  }
   const names = slashCommandNames(registry);
   for (const expected of EXPECTED_COMMANDS) {
     assert.ok(names.includes(expected), `missing command /${expected}`);
+  }
+});
+
+test('aliases resolve: /quit routes to exit handler', async () => {
+  const ctx = stubCtx();
+  const registry = buildSlashRegistry(ctx);
+  const quit = findCommand(registry, 'quit');
+  assert.ok(quit, '/quit did not resolve via aliases');
+  assert.equal(quit.name, 'exit');
+  await voidify(dispatchSlash(registry, '/quit', ctx));
+  assert.equal(ctx.exits, 1);
+});
+
+test('project-gated commands in global mode explain instead of throwing, with /new hint', async () => {
+  const ctx = stubCtx(); // mode defaults to 'global'
+  const registry = buildSlashRegistry(ctx);
+  for (const name of ['agents', 'workflows']) {
+    const command = findCommand(registry, name);
+    assert.ok(command);
+    await voidify(dispatchSlash(registry, `/${name}`, ctx));
+    const joined = ctx.system.join('\n');
+    assert.match(joined, /\/new/, `${name} should hint at /new`);
+  }
+  // runs/inspect explain that runs are per-project
+  await voidify(dispatchSlash(registry, '/runs', ctx));
+  assert.match(ctx.system.join('\n'), /no runs — runs are stored per project/);
+});
+
+test('unknown command reports via pushSystem and never throws', () => {
+  const ctx = stubCtx();
+  const registry = buildSlashRegistry(ctx);
+  assert.equal(dispatchSlash(registry, '/definitely-not-a-command', ctx), true);
+  assert.match(ctx.system.join('\n'), /Unknown command: \/definitely-not-a-command — try \/help/);
+  assert.equal(dispatchSlash(registry, 'just chatting', ctx), false);
+});
+
+test('dispatcher converts handler errors into a system message', async () => {
+  const ctx = stubCtx();
+  const registry = buildSlashRegistry(ctx);
+  const broken: RegisteredCommand[] = [
+    ...registry,
+    {
+      name: 'explode',
+      description: 'always throws',
+      category: 'system',
+      run: () => { throw new Error('boom'); },
+      action: () => { throw new Error('boom'); },
+    },
+  ];
+  assert.doesNotThrow(() => dispatchSlash(broken, '/explode', ctx));
+  assert.match(ctx.system.join('\n'), /✗ \/explode failed: boom — try \/help/);
+});
+
+test('/version prints the VERSION from commands.js', async () => {
+  const ctx = stubCtx();
+  const registry = buildSlashRegistry(ctx);
+  await voidify(dispatchSlash(registry, '/version', ctx));
+  const { VERSION } = await import('../src/commands.js');
+  assert.ok(ctx.system.at(-1)?.includes(VERSION), `expected VERSION (${VERSION}) in "${ctx.system.at(-1)}"`);
+});
+
+test('/cd without argument changes cwd to HOME (tmp HOME)', async () => {
+  const fakeHome = mkdtempSync(join(tmpdir(), 'af-home-'));
+  const previousCwd = process.cwd();
+  const previousHome = process.env.HOME;
+  try {
+    mkdirSync(join(fakeHome, '.agentforge'), { recursive: true });
+    writeFileSync(join(fakeHome, 'marker.txt'), 'x');
+    process.env.HOME = fakeHome;
+    const ctx = stubCtx();
+    const registry = buildSlashRegistry(ctx);
+    await voidify(dispatchSlash(registry, '/cd', ctx));
+    assert.equal(resolve(process.cwd()), resolve(fakeHome));
+    assert.ok(ctx.system.some((text) => text.includes('cwd →')));
+    assert.equal(ctx.refreshed, 1);
+  } finally {
+    process.chdir(previousCwd);
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    rmSync(fakeHome, { recursive: true, force: true });
+  }
+});
+
+test('/model with arg calls setSessionModel; unknown model is rejected politely', async () => {
+  const previous = process.env.AGENTFORGE_MODEL;
+  try {
+    delete process.env.AGENTFORGE_MODEL;
+    const ctx = stubCtx({ mode: () => 'project' });
+    const registry = buildSlashRegistry(ctx);
+
+    // Unknown name → no setSessionModel, explanatory message.
+    await voidify(dispatchSlash(registry, '/model totally-not-a-model-xyz', ctx));
+    assert.deepEqual(ctx.models, []);
+
+    // A built-in model name from buildModelReport must be accepted.
+    const { buildModelReport } = await import('../src/session.js');
+    const builtin = buildModelReport().find((row) => row.source === 'builtin');
+    assert.ok(builtin, 'buildModelReport returned no builtin rows');
+    await voidify(dispatchSlash(registry, `/model ${builtin.provider}`, ctx));
+    assert.deepEqual(ctx.models, [builtin.provider]);
+    assert.equal(process.env.AGENTFORGE_MODEL, builtin.provider);
+    assert.equal(ctx.refreshed, 1);
+
+    // No arg → shows current model without changing it.
+    await voidify(dispatchSlash(registry, '/model', ctx));
+    assert.deepEqual(ctx.models, [builtin.provider]);
+    assert.match(ctx.system.at(-1) ?? '', new RegExp(builtin.provider));
+  } finally {
+    if (previous === undefined) delete process.env.AGENTFORGE_MODEL;
+    else process.env.AGENTFORGE_MODEL = previous;
   }
 });
 
@@ -38,90 +197,33 @@ test('parseSlashInput extracts name and args, rejects non-commands', () => {
   assert.deepEqual(parseSlashInput('  /exit  '), { name: 'exit', args: [] });
 });
 
-test('/clear calls clearConversation and /exit calls exitRequested', () => {
-  const handlers = stubHandlers();
-  const registry = buildSlashRegistry(handlers);
-  const byName = new Map(registry.map((entry) => [entry.name, entry]));
-
-  void byName.get('clear')?.action([]);
-  assert.equal((handlers as unknown as { cleared: number }).cleared, 1);
-
-  void byName.get('exit')?.action([]);
-  assert.equal((handlers as unknown as { exits: number }).exits, 1);
-});
-
-test('screen commands route through openScreen with expected targets', () => {
-  const handlers = stubHandlers();
-  const registry = buildSlashRegistry(handlers);
-  const byName = new Map(registry.map((entry) => [entry.name, entry]));
-
-  void byName.get('help')?.action([]);
-  void byName.get('providers')?.action([]);
-  void byName.get('models')?.action([]);
-  void byName.get('tools')?.action([]);
-  void byName.get('agents')?.action([]);
-  void byName.get('workflows')?.action([]);
-  void byName.get('runs')?.action([]);
-  void byName.get('doctor')?.action([]);
-  void byName.get('config')?.action([]);
-  void byName.get('settings')?.action([]);
-  void byName.get('init')?.action([]);
-  void byName.get('new')?.action([]);
-  void byName.get('project')?.action([]);
-
-  const screens = handlers.screens.map((call) => call.screen);
-  for (const expected of ['help', 'models', 'models', 'tools', 'run', 'workflows', 'runs', 'doctor-result', 'settings', 'settings', 'new-project', 'new-project', 'new-project']) {
-    assert.ok(screens.includes(expected), `expected a navigation to ${expected}`);
+test('/clear calls clearConversation and screen commands still route', async () => {
+  const ctx = stubCtx({ mode: () => 'project' });
+  const registry = buildSlashRegistry(ctx);
+  const commands = byName(registry);
+  await voidify(commands.get('clear')!.run([], ctx));
+  assert.equal(ctx.cleared, 1);
+  for (const name of ['help', 'providers', 'models', 'tools', 'skills', 'doctor', 'config', 'settings', 'connect', 'new']) {
+    await voidify(dispatchSlash(registry, `/${name}`, ctx));
+  }
+  const screens = ctx.screens.map((call) => call.screen);
+  for (const expected of ['help', 'models', 'models', 'tools', 'skills', 'doctor', 'settings', 'settings', 'connect', 'new-project']) {
+    assert.ok(screens.includes(expected as SlashScreen), `expected navigation to ${expected}, got ${screens.join(',')}`);
   }
 });
 
-test('/inspect requires an id and forwards it', () => {
-  const handlers = stubHandlers();
+test('backward-compat action() entry point still works with legacy handlers', async () => {
+  const calls: string[] = [];
+  const handlers = {
+    openScreen: () => { calls.push('screen'); },
+    runSuspended: async (fn: () => Promise<number>) => { await fn(); },
+    pushSystem: (text: string) => { calls.push(text); },
+    clearConversation: () => { calls.push('clear'); },
+    exitRequested: () => { calls.push('exit'); },
+  };
   const registry = buildSlashRegistry(handlers);
-  const inspect = registry.find((entry) => entry.name === 'inspect');
-  assert.ok(inspect);
-
-  void inspect.action([]);
-  assert.ok(handlers.system.some((text) => text.includes('Usage')));
-  assert.equal(handlers.screens.length, 0);
-
-  void inspect.action(['run-42']);
-  assert.deepEqual(handlers.screens[0], { screen: 'inspect', arg: 'run-42' });
-});
-
-test('unknown command reports via pushSystem', () => {
-  const handlers = stubHandlers();
-  const registry = buildSlashRegistry(handlers);
-  const handled = dispatchSlash(registry, '/definitely-not-a-command', handlers.pushSystem);
-  assert.equal(handled, true);
-  assert.match(handlers.system.join('\n'), /Unknown command: \/definitely-not-a-command — try \/help/);
-});
-
-test('dispatchSlash returns false for plain chat input and routes known commands', () => {
-  const handlers = stubHandlers();
-  const registry = buildSlashRegistry(handlers);
-  assert.equal(dispatchSlash(registry, 'just chatting', handlers.pushSystem), false);
-  assert.equal(dispatchSlash(registry, '/clear', handlers.pushSystem), true);
-  assert.equal((handlers as unknown as { cleared: number }).cleared, 1);
-});
-
-test('/model without arg shows current model; with arg sets AGENTFORGE_MODEL', () => {
-  const handlers = stubHandlers();
-  const registry = buildSlashRegistry(handlers);
-  const model = registry.find((entry) => entry.name === 'model');
-  assert.ok(model);
-
-  const previous = process.env.AGENTFORGE_MODEL;
-  try {
-    delete process.env.AGENTFORGE_MODEL;
-    void model.action([]);
-    assert.ok(handlers.system.at(-1)?.includes('(unset)'));
-
-    void model.action(['test-model-x']);
-    assert.equal(process.env.AGENTFORGE_MODEL, 'test-model-x');
-    assert.ok(handlers.system.at(-1)?.includes('test-model-x'));
-  } finally {
-    if (previous === undefined) delete process.env.AGENTFORGE_MODEL;
-    else process.env.AGENTFORGE_MODEL = previous;
-  }
+  const exit = findCommand(registry, 'exit');
+  assert.ok(exit);
+  await voidify(exit.action([]));
+  assert.ok(calls.includes('exit'));
 });

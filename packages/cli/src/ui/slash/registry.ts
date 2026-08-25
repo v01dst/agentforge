@@ -1,18 +1,26 @@
-import { connectCommand, testCommand } from '../../commands.js';
+import { chdir } from 'node:process';
+import { homedir } from 'node:os';
+import { resolve as resolvePath } from 'node:path';
+import { connectCommand, testCommand, VERSION } from '../../commands.js';
 import { loadConfig } from '../../config.js';
 import { createCodingTools } from '../../coding-tools.js';
 import { currentPermissionMode } from '../../permissions-state.js';
-import { listSkills } from '../../skills/skills.js';
+import { buildModelReport } from '../../session.js';
+import { readProviderEntries } from '../../providers-store.js';
+import {
+  addRecentProject,
+  detectProject,
+  resolveActiveProvider,
+  validateProviderConnection,
+} from './local-global-config.js';
 
-export type SlashAction = (args: string[]) => void | Promise<void>;
-
-export interface SlashEntry {
-  name: string;
-  description: string;
-  usage?: string;
-  action: SlashAction;
-  interactive?: boolean;
-}
+/**
+ * Central slash-command router.
+ *
+ * Backward-compatible exports kept: `buildSlashRegistry`, `parseSlashInput`,
+ * `SlashHandlers` (extended with optional fields), and each entry still
+ * exposes `action(args)` in addition to the new `run(args, ctx)`.
+ */
 
 export type SlashScreen =
   | 'tools'
@@ -23,10 +31,36 @@ export type SlashScreen =
   | 'models'
   | 'help'
   | 'doctor-result'
+  | 'doctor'
+  | 'connect'
   | 'new-project'
   | 'run'
-  | 'inspect';
+  | 'inspect'
+  | 'skills';
 
+export interface SlashCommandSpec {
+  name: string;
+  aliases?: readonly string[];
+  description: string;
+  usage?: string;
+  argsHint?: readonly string[];
+  /** When truthy and no project is detected, the handler explains and suggests /new or /cd instead of failing. */
+  requiresProject?: false | 'explain';
+  category: 'session' | 'config' | 'resources' | 'project' | 'system';
+}
+
+export interface CommandContext {
+  mode: () => 'global' | 'project';
+  pushSystem: (t: string) => void;
+  clearConversation: () => void;
+  exitRequested: () => void;
+  openScreen: (screen: SlashScreen, arg?: string) => void;
+  runSuspended: (fn: () => Promise<number>) => Promise<void>;
+  setSessionModel: (model: string) => void;
+  refreshStatus: () => void;
+}
+
+/** Legacy handler shape; all new fields are optional so old call sites compile. */
 export interface SlashHandlers {
   openScreen: (screen: SlashScreen, arg?: string) => void;
   /** Unmount ink -> run fn -> wait Enter -> remount; console output is safe inside. */
@@ -34,7 +68,26 @@ export interface SlashHandlers {
   pushSystem: (text: string) => void;
   clearConversation: () => void;
   exitRequested: () => void;
+  mode?: () => 'global' | 'project';
+  setSessionModel?: (model: string) => void;
+  refreshStatus?: () => void;
 }
+
+export type CommandRun = (args: string[], ctx: CommandContext) => void | Promise<void>;
+
+export interface RegisteredCommand extends SlashCommandSpec {
+  run: CommandRun;
+  /** Backward-compatible single-arg entry point (uses the registry's context). */
+  action: (args: string[]) => void | Promise<void>;
+}
+
+/** Legacy alias for the registered-command list. */
+export type SlashEntry = RegisteredCommand;
+
+export type SlashAction = SlashEntry['action'];
+
+const NO_PROJECT_HINT =
+  '(no project detected — run /new to scaffold one here, or /cd <path> to switch to an existing project directory)';
 
 /** Normalize raw input ("/model x") to a command name + args, or null for non-commands. */
 export function parseSlashInput(input: string): { name: string; args: string[] } | null {
@@ -45,200 +98,396 @@ export function parseSlashInput(input: string): { name: string; args: string[] }
   return { name: parts[0]!, args: parts.slice(1) };
 }
 
-function describeEntry(entry: string | { name: string; description?: string }): string {
-  return typeof entry === 'string' ? entry : `${entry.name}${entry.description ? ` — ${entry.description}` : ''}`;
+async function currentModelNames(): Promise<string[]> {
+  let merged: unknown[] = [];
+  try {
+    const loaded = await loadConfig({ required: false });
+    const raw = (loaded.config as { providers?: unknown }).providers;
+    if (Array.isArray(raw)) merged = [...raw];
+  } catch {
+    merged = [];
+  }
+  try {
+    merged = [...merged, ...(await readProviderEntries())];
+  } catch {
+    /* sidecar providers unavailable */
+  }
+  return buildModelReport(merged as never).map((row) => row.provider);
 }
 
-export function buildSlashRegistry(handlers: SlashHandlers): SlashEntry[] {
-  const entries: SlashEntry[] = [
+export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[] {
+  const ctx: CommandContext = {
+    mode: handlers.mode ?? (() => (detectProject().detected ? 'project' : 'global')),
+    pushSystem: handlers.pushSystem,
+    clearConversation: handlers.clearConversation,
+    exitRequested: handlers.exitRequested,
+    openScreen: handlers.openScreen,
+    runSuspended: handlers.runSuspended,
+    setSessionModel: handlers.setSessionModel ?? ((model: string) => { process.env.AGENTFORGE_MODEL = model; }),
+    refreshStatus: handlers.refreshStatus ?? (() => { /* no-op when host has no status bar */ }),
+  };
+
+  function guardProject(): boolean {
+    if (ctx.mode() === 'project') return true;
+    ctx.pushSystem(NO_PROJECT_HINT);
+    return false;
+  }
+
+  const commands: Array<Omit<RegisteredCommand, 'action'> & { interactive?: boolean }> = [
     {
       name: 'help',
-      description: 'Show help overlay',
-      action: () => handlers.openScreen('help'),
+      description: 'Browse all commands (palette)',
+      usage: '/help',
+      category: 'system',
+      run: () => ctx.openScreen('help'),
     },
     {
       name: 'connect',
-      description: 'Connect a provider (credentials stored in OS keychain)',
-      usage: '/connect <provider>',
-      action: (args) => handlers.runSuspended(() => connectCommand(args[0], { 'no-prompt': true })),
+      description: 'Set up a provider interactively (works without a project)',
+      usage: '/connect',
+      category: 'config',
+      run: () => ctx.openScreen('connect'),
     },
     {
       name: 'providers',
       description: 'Open the Models & Providers manager',
-      action: () => handlers.openScreen('models'),
+      usage: '/providers',
+      category: 'config',
+      run: () => ctx.openScreen('models'),
     },
     {
       name: 'models',
       description: 'Open the Models & Providers manager',
-      action: () => handlers.openScreen('models'),
+      usage: '/models',
+      category: 'config',
+      run: () => ctx.openScreen('models'),
     },
     {
       name: 'model',
       description: 'Show or set the session model',
       usage: '/model [name]',
-      action: (args) => {
+      argsHint: ['model name — e.g. gpt-4o-mini, claude-sonnet-4, gemini-2.0-flash'],
+      category: 'config',
+      run: async (args) => {
         const name = args[0];
         if (!name) {
-          handlers.pushSystem(`Current model: ${process.env.AGENTFORGE_MODEL ?? '(unset)'}`);
+          ctx.pushSystem(`Current model: ${process.env.AGENTFORGE_MODEL ?? '(unset)'}`);
+          return;
+        }
+        const names = await currentModelNames();
+        const known = new Set(names.map((candidate) => candidate.toLowerCase()));
+        if (known.size > 0 && !known.has(name.toLowerCase())) {
+          ctx.pushSystem(`✗ unknown model '${name}' — known models:\n  ${names.join('\n  ')}\nUse /models to manage endpoints.`);
           return;
         }
         process.env.AGENTFORGE_MODEL = name;
-        handlers.pushSystem(`Model set to ${name}`);
+        ctx.setSessionModel(name);
+        ctx.refreshStatus();
+        ctx.pushSystem(`Model set to ${name}`);
       },
     },
     {
       name: 'tools',
       description: 'Browse configured and built-in tools',
-      action: () => handlers.openScreen('tools'),
+      usage: '/tools',
+      category: 'resources',
+      run: () => ctx.openScreen('tools'),
     },
     {
       name: 'skills',
-      description: 'List project skills (.agentforge/skills)',
-      interactive: true,
-      action: async () => {
-        await handlers.runSuspended(async () => {
-          const skills = await listSkills();
-          if (!skills.length) {
-            console.log('(no skills found — add markdown files under .agentforge/skills/)');
-            return 0;
-          }
-          console.log(`Skills (${skills.length}):`);
-          for (const skill of skills) {
-            console.log(`  ${skill.name}${skill.description ? ` — ${skill.description}` : ''}`);
-          }
-          return 0;
-        });
-      },
+      description: 'List project + global skills',
+      usage: '/skills',
+      category: 'resources',
+      run: () => ctx.openScreen('skills'),
     },
     {
       name: 'agents',
       description: 'Pick an agent entry to run',
-      action: () => handlers.openScreen('run'),
+      usage: '/agents',
+      requiresProject: 'explain',
+      category: 'resources',
+      run: () => {
+        if (!guardProject()) return;
+        ctx.openScreen('run');
+      },
     },
     {
       name: 'workflows',
       description: 'Browse and run workflows',
-      action: () => handlers.openScreen('workflows'),
+      usage: '/workflows',
+      requiresProject: 'explain',
+      category: 'resources',
+      run: () => {
+        if (!guardProject()) return;
+        ctx.openScreen('workflows');
+      },
     },
     {
       name: 'runs',
       description: 'Browse recent runs',
-      action: () => handlers.openScreen('runs'),
+      usage: '/runs',
+      requiresProject: 'explain',
+      category: 'resources',
+      run: () => {
+        if (ctx.mode() === 'global') {
+          ctx.pushSystem('(no runs — runs are stored per project)\n' + NO_PROJECT_HINT);
+          return;
+        }
+        ctx.openScreen('runs');
+      },
     },
     {
       name: 'inspect',
       description: 'Inspect a run by id',
       usage: '/inspect <id>',
-      action: (args) => {
+      argsHint: ['run id — see /runs'],
+      requiresProject: 'explain',
+      category: 'resources',
+      run: (args) => {
         const id = args[0];
         if (!id) {
-          handlers.pushSystem('Usage: /inspect <id>');
+          ctx.pushSystem('Usage: /inspect <id>');
           return;
         }
-        handlers.openScreen('inspect', id);
+        if (ctx.mode() === 'global') {
+          ctx.pushSystem(`(no runs — runs are stored per project; cannot inspect '${id}')\n` + NO_PROJECT_HINT);
+          return;
+        }
+        ctx.openScreen('inspect', id);
       },
     },
     {
       name: 'test',
       description: 'Run the project test suite',
+      usage: '/test',
+      requiresProject: 'explain',
       interactive: true,
-      action: () => handlers.runSuspended(() => testCommand([])),
+      category: 'project',
+      run: () => ctx.runSuspended(() => testCommand([])),
     },
     {
       name: 'doctor',
-      description: 'Show environment doctor results',
-      action: () => handlers.openScreen('doctor-result'),
+      description: 'Interactive environment checklist',
+      usage: '/doctor',
+      category: 'system',
+      run: () => ctx.openScreen('doctor'),
     },
     {
       name: 'config',
       description: 'Open session settings',
-      action: () => handlers.openScreen('settings'),
+      usage: '/config',
+      category: 'config',
+      run: () => ctx.openScreen('settings'),
     },
     {
       name: 'settings',
       description: 'Open session settings',
-      action: () => handlers.openScreen('settings'),
+      usage: '/settings',
+      category: 'config',
+      run: () => ctx.openScreen('settings'),
+    },
+    {
+      name: 'status',
+      description: 'Show detailed session status',
+      usage: '/status',
+      category: 'system',
+      run: () => {
+        const project = detectProject();
+        const active = resolveActiveProvider();
+        const check = active.source === 'none'
+          ? undefined
+          : validateProviderConnection({ provider: active.provider });
+        const lines = [
+          `mode: ${project.detected ? 'project' : 'global'}`,
+          `cwd: ${process.cwd()}`,
+          `detected project: ${project.detected ? `${project.name} (${project.marker})` : 'none — session mode'}`,
+          `provider: ${active.provider}${active.model ? ` · model: ${active.model}` : ''} (${active.source})`,
+          `connection: ${check ? (check.ready ? '✓ ready' : `! not ready — ${check.reason ?? 'unknown'} (fix: ${check.fix ?? 'run /connect'})`) : '(no provider selected — run /connect)'}`,
+          `session: ${process.env.AGENTFORGE_MODEL ? `active (model ${process.env.AGENTFORGE_MODEL})` : 'active (default model)'}`,
+          `permission mode: ${currentPermissionMode()}`,
+        ];
+        ctx.pushSystem(lines.join('\n'));
+      },
     },
     {
       name: 'clear',
       description: 'Clear the conversation',
-      action: () => handlers.clearConversation(),
-    },
-    {
-      name: 'status',
-      description: 'Show session status summary',
-      action: () => {
-        void (async () => {
-          let provider = process.env.AGENTFORGE_PROVIDER ?? '(default)';
-          let entry: string | undefined;
-          try {
-            const { config } = await loadConfig({ required: false });
-            provider = process.env.AGENTFORGE_PROVIDER ?? config.provider ?? provider;
-            entry = config.entry ?? (config as { entry?: string }).entry;
-          } catch {
-            /* fall back to env-only summary */
-          }
-          const lines = [
-            `provider: ${provider}`,
-            `model: ${process.env.AGENTFORGE_MODEL ?? '(unset)'}`,
-            `permission mode: ${currentPermissionMode()}`,
-            `cwd: ${process.cwd()}`,
-            `project entry: ${entry ?? '(not set)'}`,
-          ];
-          handlers.pushSystem(lines.join('\n'));
-        })();
-      },
-    },
-    {
-      name: 'init',
-      description: 'Initialize / scaffold a new project',
-      action: () => handlers.openScreen('new-project'),
-    },
-    {
-      name: 'new',
-      description: 'Create a new project',
-      action: () => handlers.openScreen('new-project'),
-    },
-    {
-      name: 'project',
-      description: 'New project setup',
-      action: () => handlers.openScreen('new-project'),
-    },
-    {
-      name: 'chat',
-      description: 'Return to chat',
-      action: () => handlers.pushSystem('You are already in the chat.'),
+      usage: '/clear',
+      category: 'session',
+      run: () => ctx.clearConversation(),
     },
     {
       name: 'exit',
       description: 'Exit AgentForge',
-      action: () => handlers.exitRequested(),
+      usage: '/exit',
+      aliases: ['quit'],
+      category: 'session',
+      run: () => ctx.exitRequested(),
+    },
+    {
+      name: 'version',
+      description: 'Show the AgentForge version',
+      usage: '/version',
+      category: 'system',
+      run: () => ctx.pushSystem(`AgentForge ${VERSION}`),
+    },
+    {
+      name: 'reload',
+      description: 'Re-detect the project and refresh state',
+      usage: '/reload',
+      interactive: true,
+      category: 'system',
+      run: () =>
+        ctx.runSuspended(async () => {
+          const before = detectProject();
+          const previousCwd = process.cwd();
+          console.log(`Reloading project state for ${previousCwd} …`);
+          const after = detectProject(previousCwd);
+          const changed =
+            before.detected !== after.detected || before.marker !== after.marker || before.name !== after.name;
+          console.log(
+            changed
+              ? `Project detection changed: ${before.detected ? `${before.name} (${before.marker})` : 'none'} → ${after.detected ? `${after.name} (${after.marker})` : 'none'}`
+              : `No change: ${after.detected ? `${after.name} (${after.marker})` : 'no project detected — session mode'}.`,
+          );
+          return 0;
+        }),
+    },
+    {
+      name: 'cd',
+      description: 'Change directory (and project); no argument goes home',
+      usage: '/cd <path>',
+      argsHint: ['directory path, ~ accepted; empty = home'],
+      category: 'project',
+      run: (args) => {
+        const target = args[0] ? (args[0].startsWith('~') ? joinHome(args[0]) : args[0]) : homedir();
+        let resolved: string;
+        try {
+          resolved = resolvePath(process.cwd(), target);
+          process.chdir(resolved);
+        } catch (error) {
+          ctx.pushSystem(`✗ /cd failed: ${(error as Error).message}`);
+          return;
+        }
+        const recent = addRecentProject(resolved);
+        const project = detectProject(resolved);
+        const lines = [
+          `cwd → ${resolved}`,
+          `project: ${project.detected ? `${project.name} (${project.marker})` : 'none — session mode'}`,
+          `recent projects: ${recent.length}`,
+        ];
+        ctx.pushSystem(lines.join('\n'));
+        ctx.refreshStatus();
+      },
+    },
+    {
+      name: 'new',
+      description: 'Create a new project',
+      usage: '/new',
+      aliases: ['init', 'project'],
+      category: 'project',
+      run: () => ctx.openScreen('new-project'),
+    },
+    {
+      name: 'chat',
+      description: 'Return to chat (you are already here)',
+      usage: '/chat',
+      category: 'session',
+      run: () => ctx.pushSystem('You are already in the chat.'),
     },
   ];
-  return entries;
+
+  // Every command gets a backward-compatible `action(args)` that routes through
+  // run() with the shared context; both paths catch errors into pushSystem.
+  return commands.map((command) => {
+    const registered: RegisteredCommand = { ...command, action: (args: string[]) => executeRegistered(registered, args, ctx) };
+    return registered;
+  });
+
+  // -- local helpers ---------------------------------------------------------
+
+  function executeRegistered(command: RegisteredCommand, args: string[], context: CommandContext): void | Promise<void> {
+    try {
+      const result = command.run(args, context);
+      if (result && typeof (result as Promise<void>).then === 'function') {
+        return (result as Promise<void>).catch((error: unknown) => reportFailure(command.name, error, context));
+      }
+      return result;
+    } catch (error) {
+      reportFailure(command.name, error, context);
+      return undefined;
+    }
+  }
 }
 
-/** Dispatch parsed input against the registry; returns false when unknown. */
+function reportFailure(name: string, error: unknown, ctx: CommandContext): void {
+  const message = error instanceof Error ? error.message : String(error);
+  ctx.pushSystem(`✗ /${name} failed: ${message} — try /help`);
+}
+
+function joinHome(pathWithTilde: string): string {
+  const rest = pathWithTilde.slice(1).replace(/^[/\\]/, '');
+  return rest ? `${homedir()}/${rest}` : homedir();
+}
+
+/** Resolve a command by name or alias. */
 export function dispatchSlash(
-  registry: readonly SlashEntry[],
+  registry: readonly RegisteredCommand[],
   input: string,
-  pushSystem: (text: string) => void,
+  pushSystemOrCtx: ((text: string) => void) | CommandContext,
 ): boolean {
   const parsed = parseSlashInput(input);
   if (!parsed) return false;
-  const entry = registry.find((candidate) => candidate.name === parsed.name);
+  const pushSystem = typeof pushSystemOrCtx === 'function' ? pushSystemOrCtx : pushSystemOrCtx.pushSystem;
+  const ctx: CommandContext = typeof pushSystemOrCtx === 'function'
+    ? fallbackContext(pushSystem)
+    : pushSystemOrCtx;
+  const entry = findCommand(registry, parsed.name);
   if (!entry) {
     pushSystem(`Unknown command: /${parsed.name} — try /help`);
     return true;
   }
-  void entry.action(parsed.args);
+  void executeSafe(entry, parsed.args, ctx);
   return true;
 }
 
+function fallbackContext(pushSystem: (text: string) => void): CommandContext {
+  return {
+    mode: () => (detectProject().detected ? 'project' : 'global'),
+    pushSystem,
+    clearConversation: () => { /* legacy no-op */ },
+    exitRequested: () => process.exit(0),
+    openScreen: () => { /* legacy no-op */ },
+    runSuspended: async (fn) => { await fn(); },
+    setSessionModel: (model) => { process.env.AGENTFORGE_MODEL = model; },
+    refreshStatus: () => { /* no-op */ },
+  };
+}
+
+function executeSafe(entry: RegisteredCommand, args: string[], ctx: CommandContext): void {
+  try {
+    const result = entry.run(args, ctx);
+    if (result && typeof (result as Promise<void>).catch === 'function') {
+      void (result as Promise<void>).catch((error: unknown) => reportFailure(entry.name, error, ctx));
+    }
+  } catch (error) {
+    reportFailure(entry.name, error, ctx);
+  }
+}
+
+/** Resolve a command by name or alias. */
+export function findCommand(registry: readonly RegisteredCommand[], name: string): RegisteredCommand | undefined {
+  const lower = name.toLowerCase();
+  return registry.find(
+    (candidate) => candidate.name === lower || (candidate.aliases ?? []).includes(lower),
+  );
+}
+
 /** Names of all registered commands (for tests / help rendering). */
-export function slashCommandNames(registry: readonly SlashEntry[]): string[] {
+export function slashCommandNames(registry: readonly RegisteredCommand[]): string[] {
   return registry.map((entry) => entry.name);
 }
 
 // Re-exported for screens that need shared helpers without extra imports.
-export { describeEntry, createCodingTools, loadConfig, listSkills };
+export { createCodingTools, loadConfig };
+export { connectCommand, testCommand, VERSION };

@@ -5,6 +5,8 @@ import { parseSlashCommand } from '../turn.js';
 import { useTurn } from '../useTurn.js';
 import type { ChatMessage } from '../useTurn.js';
 import type { TurnRunner } from '../turn.js';
+import { ActivityIndicator } from './Activity.js';
+import { Frame } from './Frame.js';
 
 export interface SlashCommand {
   name: string;
@@ -18,6 +20,9 @@ export interface ChatHomeProps {
   onSlashCommand?: (name: string, args: string[]) => void;
   provider?: string;
   model?: string;
+  /** Contextual label shown next to the spinner while a turn is running. */
+  activity?: string;
+  projectName?: string;
 }
 
 /** Built-in slash-command registry surfaced in the suggestion menu. */
@@ -51,6 +56,15 @@ const EXIT_CONFIRM_MS = 2000;
 function MessageRow({ message }: { message: ChatMessage }) {
   if (message.role === 'user') return <Text><Text color="green">you › </Text>{message.text}</Text>;
   if (message.role === 'system') return <Text dimColor>note › {message.text}</Text>;
+  if (message.role === 'tool') {
+    const ms = message.meta?.ms;
+    return (
+      <Text dimColor>
+        {'\\u2699'} tool › {message.meta?.tool ?? message.text}
+        {ms !== undefined ? ` (${(ms / 1000).toFixed(1)}s)` : ''}
+      </Text>
+    );
+  }
   return <Text><Text color="cyan">agent › </Text>{message.text}</Text>;
 }
 
@@ -58,12 +72,15 @@ function MessageRow({ message }: { message: ChatMessage }) {
  * Chat-first home screen: a persistent chat interface with live streaming,
  * inline slash-command suggestions above the input, and a status bar.
  */
-export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', model }: ChatHomeProps) {
-  const { messages, streamingText, running, status, send, cancel, clear, pushSystem } = useTurn(runner);
+export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', model, activity, projectName }: ChatHomeProps) {
+  const { messages, streamingText, running, status, lastError, send, cancel, clear, pushSystem } = useTurn(runner);
   const [input, setInput] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [menuDismissed, setMenuDismissed] = useState(false);
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const draftRef = useRef('');
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Welcome banner so users know the interface is ready and how to discover
@@ -107,6 +124,9 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
     setInput('');
     setSelectedIndex(0);
     if (!raw) return;
+    setHistory((previous) => (previous[previous.length - 1] === raw ? previous : [...previous, raw]));
+    setHistoryIndex(-1);
+    draftRef.current = '';
     if (!raw.startsWith('/')) {
       void send(raw);
       return;
@@ -130,6 +150,27 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
       setShowExitConfirm(true);
       if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
       exitTimerRef.current = setTimeout(() => setShowExitConfirm(false), EXIT_CONFIRM_MS);
+      return;
+    }
+
+    // Input history recall — up/down cycle submitted inputs; only while the
+    // suggestion menu is closed.
+    if (!menuOpen && history.length > 0 && (key.upArrow || key.downArrow)) {
+      if (key.upArrow) {
+        if (historyIndex === -1) draftRef.current = input;
+        const next = historyIndex === -1 ? history.length - 1 : Math.max(historyIndex - 1, 0);
+        setHistoryIndex(next);
+        setInput(history[next] ?? '');
+      } else {
+        const next = historyIndex + 1;
+        if (next >= history.length) {
+          setHistoryIndex(-1);
+          setInput(draftRef.current);
+        } else {
+          setHistoryIndex(next);
+          setInput(history[next] ?? '');
+        }
+      }
       return;
     }
 
@@ -166,16 +207,28 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
     if (value && !key.ctrl && !key.meta) {
       setInput((current) => current + value);
       setMenuDismissed(false);
+      if (historyIndex !== -1) { setHistoryIndex(-1); draftRef.current = ''; }
     }
   });
 
   return (
+    <Frame
+      mode={projectName ? { kind: 'project', name: projectName } : { kind: 'global' }}
+      provider={provider}
+      model={model}
+    >
     <Box flexDirection="column">
       <Static items={messages}>
         {(message, index) => <MessageRow key={index} message={message} />}
       </Static>
       {streamingText ? <MessageRow message={{ role: 'assistant', text: streamingText }} /> : null}
-      {running ? <Text dimColor>working… (Ctrl-C to cancel)</Text> : null}
+      {running ? <ActivityIndicator label={activity ?? 'working… (Ctrl-C to cancel)'} /> : null}
+      {lastError && !running ? (
+        <Box borderStyle="round" borderColor="red" paddingX={1} flexDirection="column" marginTop={1}>
+          <Text color="red">{lastError}</Text>
+          <Text dimColor>try /doctor or /help</Text>
+        </Box>
+      ) : null}
       {showExitConfirm ? <Text color="yellow">Press Ctrl+C again to exit</Text> : null}
       {menuOpen ? (
         <Box flexDirection="column">
@@ -204,5 +257,6 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
         <Text dimColor>[Ctrl+K] palette [?] help</Text>
       </Box>
     </Box>
+    </Frame>
   );
 }

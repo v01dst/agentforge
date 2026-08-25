@@ -9,6 +9,7 @@ export interface TurnDelta {
   text?: string;
   usage?: TurnUsage;
   runId?: string;
+  tool?: { name: string; ms?: number };
 }
 
 export type SkillSelection = readonly string[];
