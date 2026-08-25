@@ -11,6 +11,7 @@ import { scaffold } from './project.js';
 import { readExtensions } from './extensions/store.js';
 import { listSkills, skillBodies } from './skills/skills.js';
 import { buildTurnRunner, resolveRunnable } from './ui/turn.js';
+import { loadProjectPlugins } from './plugins/plugins.js';
 import { buildModelReport, createSessionFromModule, drainStream, formatTurnFooter, isCancelLike } from './session.js';
 import { addProviderEntry, readProviderEntries, removeProviderEntry, type ProviderEntry } from './providers-store.js';
 import type { AgentForgeConfig, ChatSession, NamedEntry, ParsedCli, RunnableModule } from './types.js';
@@ -36,6 +37,8 @@ Commands:
   inspect <run-id>   Inspect a persisted run
   tools              List configured tools
   workflows          List configured workflows
+  plugins [sub]      List plugins, or manage registrations:
+                       add <path> | remove <path>
   doctor             Check the local AgentForge project
   connect <provider> Configure a provider credential or endpoint
 
@@ -495,10 +498,73 @@ export async function doctorCommand(flags: Record<string, string | boolean>): Pr
     const env = name === 'openai' ? 'OPENAI_API_KEY' : name === 'anthropic' ? 'ANTHROPIC_API_KEY' : name === 'google' || name === 'gemini' ? 'GOOGLE_API_KEY' : undefined;
     if (env) checks.push([`Provider ${name}`, Boolean(process.env[env]), `${env} ${process.env[env] ? 'set' : 'missing'}`]);
   }
+  const extensions = await readExtensions();
+  const { plugins, failures } = await loadProjectPlugins(extensions);
+  for (const plugin of plugins) {
+    checks.push([`Plugin ${plugin.name}`, true, `${plugin.path}${plugin.tools.length ? ` · tools: ${plugin.tools.join(', ')}` : ''}`]);
+  }
+  for (const failure of failures) checks.push(['Plugin', false, `${failure.path}: ${failure.reason}`]);
+  const mcpServers = extensions.mcp?.servers ?? [];
+  if (!mcpServers.length) checks.push(['MCP servers', true, 'none configured']);
+  for (const server of mcpServers) {
+    // Security surface: show exactly what executable will be launched.
+    checks.push([`MCP server ${server.name}`, true, `command: ${JSON.stringify(server.command)}${server.cwd ? ` · cwd: ${server.cwd}` : ''}`]);
+  }
   if (flagBoolean(flags, 'json')) { printJson({ path, checks: checks.map(([name, ok, detail]) => ({ name, ok, detail })) }); return checks.every(([, ok]) => ok) ? 0 : 1; }
   heading('AgentForge doctor');
   for (const [name, ok, detail] of checks) (ok ? success : warn)(`${ok ? '✓' : '!' } ${name}: ${detail}`);
   return checks.every(([, ok]) => ok) ? 0 : 1;
+}
+
+export async function pluginsCommand(flags: Record<string, string | boolean>): Promise<number> {
+  const extensions = await readExtensions();
+  const { plugins, failures } = await loadProjectPlugins(extensions);
+  if (flagBoolean(flags, 'json')) { printJson({ plugins, failures }); return failures.length ? 1 : 0; }
+  heading('AgentForge plugins');
+  const entries = extensions.plugins ?? [];
+  if (!entries.length) { hint('No plugins configured. Add one with `agentforge plugins add <path>` or .agentforge/extensions.json.'); return 0; }
+  for (const plugin of plugins) {
+    success(`✓ ${plugin.name}${plugin.description ? ` — ${plugin.description}` : ''}`);
+    info(`    tools: ${plugin.tools.length ? plugin.tools.join(', ') : '(none)'}`); 
+    if (plugin.hasInstructions) info('    instructions: yes');
+  }
+  for (const failure of failures) warn(`! ${failure.path}: ${failure.reason}`);
+  return failures.length ? 1 : 0;
+}
+
+/** Register a plugin module path in .agentforge/extensions.json. */
+export async function pluginsAddCommand(path: string | undefined): Promise<number> {
+  if (!path) throw new Error('Missing path. Usage: agentforge plugins add <path-to-module>.');
+  const absolute = isAbsolute(path) ? path : resolve(process.cwd(), path);
+  await access(absolute, constants.R_OK);
+  const extensions = await readExtensions();
+  const existing = extensions.plugins ?? [];
+  const duplicate = existing.some((entry) => (typeof entry === 'string' ? entry : entry.path) === absolute);
+  let registeredName = absolute;
+  if (!duplicate) {
+    const { loadProjectPlugins: verify } = await import('./plugins/plugins.js');
+    const probe = await verify({ ...extensions, plugins: [...existing, absolute] });
+    if (probe.failures.length) throw new Error(`Plugin failed to load: ${probe.failures[0]?.reason}`);
+    registeredName = probe.plugins.at(-1)?.name ?? absolute;
+    const { writeExtensions } = await import('./extensions/store.js');
+    await writeExtensions({ ...extensions, plugins: [...existing, absolute] });
+  }
+  success(`Plugin registered: ${registeredName}`);
+  hint(String(absolute));
+  return 0;
+}
+
+export async function pluginsRemoveCommand(path: string | undefined): Promise<number> {
+  if (!path) throw new Error('Missing path. Usage: agentforge plugins remove <path>.');
+  const absolute = isAbsolute(path) ? path : resolve(process.cwd(), path);
+  const extensions = await readExtensions();
+  const existing = extensions.plugins ?? [];
+  const next = existing.filter((entry) => (typeof entry === 'string' ? entry : entry.path) !== absolute);
+  if (next.length === existing.length) { warn(`Not registered: ${absolute}`); return 1; }
+  const { writeExtensions } = await import('./extensions/store.js');
+  await writeExtensions({ ...extensions, plugins: next });
+  success(`Plugin removed: ${absolute}`);
+  return 0;
 }
 
 export async function connectCommand(provider: string | undefined, flags: Record<string, string | boolean>): Promise<number> {

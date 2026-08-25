@@ -1,7 +1,7 @@
 import { chdir } from 'node:process';
 import { homedir } from 'node:os';
 import { resolve as resolvePath } from 'node:path';
-import { connectCommand, testCommand, VERSION } from '../../commands.js';
+import { connectCommand, pluginsCommand, testCommand, VERSION } from '../../commands.js';
 import { loadConfig } from '../../config.js';
 import { createCodingTools } from '../../coding-tools.js';
 import { currentPermissionMode } from '../../permissions-state.js';
@@ -199,6 +199,13 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
       usage: '/skills',
       category: 'resources',
       run: () => ctx.openScreen('skills'),
+    },
+    {
+      name: 'plugins',
+      description: 'List registered plugins and their contributions',
+      usage: '/plugins',
+      category: 'resources',
+      run: () => ctx.runSuspended(() => pluginsCommand({})),
     },
     {
       name: 'agents',

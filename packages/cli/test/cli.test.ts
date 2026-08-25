@@ -33,6 +33,10 @@ test('local-link scaffold prints pnpm instructions and file dependencies', async
     assert.match(readme, /pnpm install/);
     assert.match(readme, /pnpm exec agentforge chat/);
     assert.match(readme, /Local-link mode/);
+    const examplePlugin = await readFile(join(target, 'plugins', 'example.ts'), 'utf8');
+    assert.match(examplePlugin, /AgentForgePlugin/);
+    const extensionsJson = JSON.parse(await readFile(join(target, '.agentforge', 'extensions.json'), 'utf8')) as { plugins?: string[] };
+    assert.deepEqual(extensionsJson.plugins, ['./plugins/example.ts']);
   } finally { await rm(parent, { recursive: true, force: true }); }
 });
 

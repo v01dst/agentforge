@@ -8,7 +8,7 @@ const files: Record<string, string> = {
   "packageManager": "pnpm@9.15.5",
   "type": "module",
   "scripts": { "run": "agentforge run src/agent.ts", "chat": "agentforge chat src/agent.ts", "start": "agentforge", "typecheck": "tsc --noEmit", "test": "tsx --test test/*.test.ts" },
-  "dependencies": { "@agentforge-oss/cli": "^0.3.1", "@agentforge-oss/core": "^0.3.1", "@agentforge-oss/models": "^0.3.1" },
+  "dependencies": { "@agentforge-oss/cli": "^0.3.1", "@agentforge-oss/core": "^0.3.1", "@agentforge-oss/models": "^0.3.1", "zod": "^3.24.1" },
   "devDependencies": { "@types/node": "^22.10.2", "tsx": "^4.19.2", "typescript": "^5.7.2" }
 }
 `,
@@ -182,14 +182,45 @@ export function createSession(): AgentForgeSession {
   };
 }
 
-/** Build the project agent. Used by one-shot runs and headless tests. */
+/** Build the project agent. Used by one-shot runs, chat sessions, and headless tests.
+ *  Plugin tools/instructions registered in .agentforge/extensions.json are merged here. */
 export async function createAgent(): Promise<Agent> {
   const model = await loadModel();
-  return new Agent({ name: agentName, model, instructions });
+  const { pluginContributions } = await import('@agentforge-oss/cli');
+  const { tools, instructions } = await pluginContributions();
+  return new Agent({ name: agentName, model, instructions: ['Be concise and factual.', ...instructions].join('\n'), tools });
 }
 
 export async function run(input = 'Hello from AgentForge'): Promise<unknown> {
   return (await createAgent()).run(input);
+}
+`,
+  'plugins/example.ts': `import { z } from 'zod';
+import type { AgentForgePlugin } from '@agentforge-oss/cli';
+
+/** Example plugin: contributes one deterministic tool plus a system note. */
+const plugin: AgentForgePlugin = {
+  name: 'example',
+  description: 'Demonstrates the AgentForge plugin contract',
+  instructions: 'The example plugin is active.',
+  tools: [
+    {
+      name: 'greet',
+      description: 'Return a friendly greeting for a name',
+      inputSchema: z.object({ name: z.string() }),
+      permissions: [],
+      async execute(input: { name: string }) {
+        return { text: \`Hello, \${input.name}!\` };
+      },
+    },
+  ],
+};
+
+export default plugin;
+`,
+  '.agentforge/extensions.json': `{
+  "plugins": ["./plugins/example.ts"],
+  "mcp": { "servers": [] }
 }
 `,
   'provider.example.mjs': `export default {
