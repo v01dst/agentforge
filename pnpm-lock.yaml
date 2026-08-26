@@ -123,6 +123,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@agentforge-oss/core':
+        specifier: workspace:*
+        version: link:../core
       '@agentforge-oss/mcp':
         specifier: workspace:*
         version: link:../mcp

@@ -969,13 +969,14 @@ The project was rebranded **AgentForge v0.01** (`0.0.1`) alongside this work.
 - [ ] End-to-end verification against a real published/community MCP server over stdio (unit + in-memory transport covered; real npx-server run pending on a network-capable machine).
 - [ ] MCP connections closed deterministically on turn cancel mid-stream (currently process-exit hooks).
 
-### Milestone D: UI Represents Reality
+### Milestone D: UI Represents Reality — playground truthful (2026-08-26); CLI/store unification open
 
-- Add local/default run storage.
-- Connect CLI and playground to the same store.
-- Remove seeded metrics and lists.
-- Add real run, event, tool, and usage inspection.
-- Finish workflow persistence and editing.
+- [x] Add local/default run storage (`JsonlRunStore`, `.agentforge/playground-runs.jsonl`).
+- [x] Remove seeded metrics and lists (verified: no seed/sample data in `apps/playground`).
+- [x] Add real run, event, tool, and usage inspection (`GET /api/runs` + inspector timeline).
+- [x] Disable unreal controls ("coming soon" labels on workflows authoring/environment).
+- [ ] Connect CLI and playground to the same store (CLI now persists sessions under `.agentforge/sessions`; playground uses its own runs file).
+- [ ] Finish workflow persistence and editing.
 
 ## 16. Definition of “Ready to Use”
 

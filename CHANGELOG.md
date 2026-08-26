@@ -16,6 +16,10 @@ All notable changes to AgentForge are documented here.
 - Permission modes enforced live via `/mode [read-only|ask|workspace-write|trusted]`; `ask` mode surfaces an in-TUI approval card (y / a=always this session / n / Esc) with tool summary and queued count; headless contexts fail closed.
 - Tool activity renders live during turns (`⠿ running` → `✓ done · duration`) by bridging core agent events into the streaming delta channel; project-mode turns append a one-line git diff summary.
 
+### Release automation
+
+- GitHub Actions: CI gate on every push/PR (Node 20 & 22); `v*` tags build, test, and publish all `@agentforge-oss/*` packages via `NPM_AUTH_TOKEN`.
+
 ### TUI skin engine (v0.1 "Forge", phase A)
 
 - New semantic skin system (`packages/cli/src/ui/skin.ts`): three built-in skins — **forge** (gold/amber, default), **midnight** (cyan/indigo), **paper** (light) — with truecolor hex palettes that degrade to ANSI-256/plain automatically. Project `.agentforge/skin.json` and global `~/.agentforge/skin.json` override presets (palette-level merges supported); `AGENTFORGE_SKIN` env selects a preset.
