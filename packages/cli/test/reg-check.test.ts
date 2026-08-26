@@ -12,5 +12,5 @@ test('registry filters /mo', () => {
   };
   const registry = buildSlashRegistry(handlers);
   const matches = registry.filter((c) => c.name.startsWith('mo'));
-  assert.deepEqual(matches.map((m) => m.name).sort(), ['model', 'models']);
+  assert.deepEqual(matches.map((m) => m.name).sort(), ['mode', 'model', 'models']);
 });

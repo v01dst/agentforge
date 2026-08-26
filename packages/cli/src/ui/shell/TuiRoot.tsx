@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Box, Text } from 'ink';
 import type { ComponentType } from 'react';
 import { ChatHome } from './ChatHome.js';
+import { ApprovalCard } from '../ApprovalCard.js';
 import type { TurnRunner } from '../turn.js';
 import {
   buildSlashRegistry,
@@ -66,13 +67,16 @@ export function TuiRoot({ screens = {}, runner, provider, model, mode, projectNa
   }
 
   return (
-    <ChatHome
-      runner={runner}
-      commands={commands}
-      onSlashCommand={onSlashCommand}
-      provider={provider}
-      model={model}
-      projectName={mode === 'project' ? projectName : undefined}
-    />
+    <Box flexDirection="column">
+      <ApprovalCard />
+      <ChatHome
+        runner={runner}
+        commands={commands}
+        onSlashCommand={onSlashCommand}
+        provider={provider}
+        model={model}
+        projectName={mode === 'project' ? projectName : undefined}
+      />
+    </Box>
   );
 }

@@ -229,6 +229,28 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
       },
     },
     {
+      name: 'mode',
+      description: 'Show or set the permission mode for coding tools',
+      usage: '/mode [read-only|ask|workspace-write|trusted]',
+      argsHint: ['mode'],
+      category: 'config',
+      run: async (args, cmdCtx) => {
+        const { PERMISSION_MODES, currentPermissionMode, setPermissionMode } = await import('../../permissions.js');
+        const target = args[0];
+        if (!target) {
+          cmdCtx.pushSystem(`permission mode: ${currentPermissionMode()} — modes: ${PERMISSION_MODES.join(' | ')}`);
+          return;
+        }
+        if (!(PERMISSION_MODES as readonly string[]).includes(target)) {
+          cmdCtx.pushSystem(`✗ unknown mode '${target}' — modes: ${PERMISSION_MODES.join(', ')}`);
+          return;
+        }
+        setPermissionMode(target as never);
+        cmdCtx.refreshStatus();
+        cmdCtx.pushSystem(`permission mode: ${target}`);
+      },
+    },
+    {
       name: 'agents',
       description: 'Pick an agent entry to run',
       usage: '/agents',

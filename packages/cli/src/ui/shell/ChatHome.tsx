@@ -26,6 +26,8 @@ export interface ChatHomeProps {
   projectName?: string;
   /** True when no provider key is configured — show inline first-run onboarding. */
   needsOnboarding?: boolean;
+  /** Seed the composer with text on mount (used by headless tests). */
+  initialInput?: string;
   /** Called after a provider key validates so the parent can refresh status. */
   onProviderConnected?: () => void;
 }
@@ -77,9 +79,9 @@ function MessageRow({ message }: { message: ChatMessage }) {
  * Chat-first home screen: a persistent chat interface with live streaming,
  * inline slash-command suggestions above the input, and a status bar.
  */
-export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', model, activity, projectName, needsOnboarding = false, onProviderConnected }: ChatHomeProps) {
+export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', model, activity, projectName, needsOnboarding = false, onProviderConnected, initialInput }: ChatHomeProps) {
   const { messages, streamingText, running, status, lastError, toolEvents, send, cancel, clear, pushSystem } = useTurn(runner);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(initialInput ?? '');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [menuDismissed, setMenuDismissed] = useState(false);

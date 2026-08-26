@@ -21,11 +21,18 @@ export async function launchInteractiveShell(): Promise<boolean> {
   const { detectProject } = await import('./runtime-session.js');
   const detection = await detectProject();
 
-  // REAL model runner: provider/model resolved from env detection (or
-  // AGENTFORGE_* overrides) and backed by @agentforge-oss/models. A project
+  // REAL coding-agent runner: a core Agent over the detected provider with
+  // the seven policy-wrapped repository tools attached (permission modes via
+  // /mode; approvals surface as an in-TUI card in ask mode). A project
   // entrypoint can still override the runner, but is never required.
-  const { resolveModelRunner } = await import('./model-runner.js');
-  let resolved = await resolveModelRunner();
+  const { buildAgentRunner } = await import('./coding-session.js');
+  const { detectDefaultProvider } = await import('./model-runner.js');
+  const detectedProviderModel = detectDefaultProvider();
+  let resolved = {
+    provider: detectedProviderModel.provider,
+    model: detectedProviderModel.model,
+    runner: buildAgentRunner({ root: process.cwd() }),
+  };
   let projectName: string | undefined;
 
   if (detection.found && detection.configPath) {
@@ -33,14 +40,24 @@ export async function launchInteractiveShell(): Promise<boolean> {
       const { importEntry } = await import('./commands.js');
       const { loadConfig } = await import('./config.js');
       const { buildTurnRunner } = await import('./ui/turn.js');
+      const { gitDiffSummary } = await import('./git-diff-summary.js');
       const { config } = await loadConfig({ required: false });
-      if (config.entry) {
-        const module = await importEntry(config.entry, { configPath: detection.configPath });
-        resolved = { ...resolved, runner: buildTurnRunner(module) };
+      const inner = config.entry
+        ? buildTurnRunner(await importEntry(config.entry, { configPath: detection.configPath }))
+        : undefined;
+      if (inner) {
         projectName = config.name;
+        resolved = {
+          ...resolved,
+          runner: async function* withDiff(input, signal, context) {
+            for await (const delta of inner(input, signal, context)) yield delta;
+            const summary = await gitDiffSummary();
+            if (summary) yield { text: `\n\ngit · ${summary}` };
+          },
+        };
       }
     } catch {
-      /* project entrypoint failed — keep the real model runner */
+      /* project entrypoint failed — keep the coding-agent runner */
     }
   }
   const runner = resolved.runner;
