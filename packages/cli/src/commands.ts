@@ -39,6 +39,8 @@ Commands:
   workflows          List configured workflows
   plugins [sub]      List plugins, or manage registrations:
                        add <path> | remove <path>
+  sessions [sub]     List stored conversations, or:
+                       resume <id> | delete <id>
   mcp [sub]          List MCP servers, or manage them:
                        add <name> [--cwd <dir>] -- <command> [args...]
                        remove <name> | tools [server]
@@ -623,6 +625,36 @@ export async function mcpCommand(args: string[], flags: Record<string, string | 
     return failures.length && !tools.length ? 1 : 0;
   }
   throw new Error(`Unknown mcp subcommand: ${sub}. Usage: agentforge mcp [list|add|remove|tools].`);
+}
+
+export async function sessionsCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
+  const [sub, id] = args;
+  const { listSessions, loadSession, deleteSession } = await import('./sessions/store.js');
+  if (!sub || sub === 'list' || sub === 'ls') {
+    const all = await listSessions();
+    if (flagBoolean(flags, 'json')) { printJson({ sessions: all }); return 0; }
+    heading('AgentForge sessions');
+    if (!all.length) { hint('No stored sessions yet. They are created automatically as you chat.'); return 0; }
+    for (const entry of all.slice(0, 12)) info(`  ${entry.id}  ${String(entry.messages).padStart(3)} msgs  ${entry.title}`);
+    hint(`resume with: agentforge sessions resume <id>`);
+    return 0;
+  }
+  if (sub === 'delete' || sub === 'rm') {
+    if (!id) throw new Error('Missing id. Usage: agentforge sessions delete <id>.');
+    const removed = await deleteSession(id);
+    (removed ? success : warn)(removed ? `Deleted session ${id}` : `Unknown session: ${id}`);
+    return removed ? 0 : 1;
+  }
+  if (sub === 'resume') {
+    const stored = await loadSession(id ?? '');
+    if (!stored) throw new Error(`Unknown session: ${id ?? '(none)'}`);
+    const { launchInteractiveShell } = await import('./interactive.js');
+    const launched = await launchInteractiveShell({
+      initialMessages: stored.messages.map((message) => ({ role: message.role, text: message.text })),
+    });
+    return launched ? 0 : 1;
+  }
+  throw new Error(`Unknown sessions subcommand: ${sub}. Usage: agentforge sessions [list|resume|delete].`);
 }
 
 export async function connectCommand(provider: string | undefined, flags: Record<string, string | boolean>): Promise<number> {

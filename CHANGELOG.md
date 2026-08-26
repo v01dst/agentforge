@@ -4,6 +4,12 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### Durable sessions (v0.1 phase C)
+
+- Conversations persist automatically to `.agentforge/sessions/` (project) and `~/.agentforge/sessions/` (global); the newest transcript restores on next launch with an inline note.
+- New commands: `agentforge sessions list|resume <id>|delete <id>` and chat slash commands `/sessions`, `/resume [id]`, `/new`.
+- Session ids are validated; stores merge project-over-global with deterministic ordering.
+
 ### Coding agent loop (v0.1 phase B)
 
 - `agentforge` interactive sessions now run a real core Agent with the seven repository tools attached (`list_files`, `read_file`, `search_text`, `apply_patch`, `inspect_git_diff`, `run_command` when allowlisted, `run_tests`) — the terminal experience is a working coding agent, not just a model chat.

@@ -103,5 +103,12 @@ export function useTurn(runner: TurnRunner) {
     setMessages((previous) => [...previous, { role: 'system', text }]);
   }, []);
 
-  return { messages, streamingText, running, status, lastError, toolEvents, send, cancel, clear, pushSystem };
+  /** Replace the whole transcript (session resume). */
+  const hydrate = useCallback((restored: ChatMessage[]) => {
+    setMessages(restored);
+    setStatus({});
+    setLastError(undefined);
+  }, []);
+
+  return { messages, streamingText, running, status, lastError, toolEvents, send, cancel, clear, pushSystem, hydrate };
 }

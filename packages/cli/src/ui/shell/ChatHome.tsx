@@ -6,6 +6,7 @@ import type { ChatMessage } from '../useTurn.js';
 import type { TurnRunner } from '../turn.js';
 import { ActivityIndicator } from './Activity.js';
 import { colors } from './theme.js';
+import { listSessions, loadSession, newSessionId, saveSession } from '../../sessions/store.js';
 import { validateProviderConnection } from '../../global-config.js';
 import type { GlobalProviderEntry } from '../../global-config.js';
 
@@ -28,6 +29,10 @@ export interface ChatHomeProps {
   needsOnboarding?: boolean;
   /** Seed the composer with text on mount (used by headless tests). */
   initialInput?: string;
+  /** Restore the most recent stored conversation on mount (default true). */
+  autoResume?: boolean;
+  /** Seed messages (e.g. `agentforge sessions resume <id>`). Skips auto-resume. */
+  initialMessages?: ChatMessage[];
   /** Called after a provider key validates so the parent can refresh status. */
   onProviderConnected?: () => void;
 }
@@ -79,8 +84,10 @@ function MessageRow({ message }: { message: ChatMessage }) {
  * Chat-first home screen: a persistent chat interface with live streaming,
  * inline slash-command suggestions above the input, and a status bar.
  */
-export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', model, activity, projectName, needsOnboarding = false, onProviderConnected, initialInput }: ChatHomeProps) {
-  const { messages, streamingText, running, status, lastError, toolEvents, send, cancel, clear, pushSystem } = useTurn(runner);
+export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', model, activity, projectName, needsOnboarding = false, onProviderConnected, initialInput, autoResume = true, initialMessages }: ChatHomeProps) {
+  const { messages, streamingText, running, status, lastError, toolEvents, send, cancel, clear, pushSystem, hydrate } = useTurn(runner);
+  const sessionIdRef = useRef(newSessionId());
+  const restoredRef = useRef(false);
   const [input, setInput] = useState(initialInput ?? '');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -91,6 +98,43 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
   const [pendingProvider, setPendingProvider] = useState<Pick<GlobalProviderEntry, 'name' | 'protocol' | 'apiKeyEnv'> | null>(null);
   const draftRef = useRef('');
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Session restore: explicit seed wins, then latest stored conversation.
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    if (initialMessages?.length) {
+      hydrate(initialMessages);
+      pushSystem(`resumed ${initialMessages.length} message(s) from CLI`);
+      return;
+    }
+    if (!autoResume) return;
+    void (async () => {
+      const [latest] = await listSessions();
+      if (!latest || latest.messages === 0) return;
+      const stored = await loadSession(latest.id);
+      if (!stored?.messages.length) return;
+      sessionIdRef.current = stored.id;
+      hydrate(stored.messages);
+      pushSystem(`resumed session ${stored.id} — ${stored.messages.length} message(s). /new starts fresh.`);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Autosave whenever the transcript changes while idle.
+  useEffect(() => {
+    if (running || messages.length === 0) return;
+    void saveSession({
+      id: sessionIdRef.current,
+      title: messages.find((entry) => entry.role === 'user')?.text.slice(0, 48) ?? 'session',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages,
+      provider,
+      model,
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, running]);
 
   // Welcome banner so users know the interface is ready and how to discover
   // commands (rendered once, before the first message). During first-run
@@ -161,6 +205,33 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
     }
     if (command.name === 'clear') {
       clear();
+      return;
+    }
+    if (command.name === 'new') {
+      clear();
+      sessionIdRef.current = newSessionId();
+      pushSystem('new session started');
+      return;
+    }
+    if (command.name === 'sessions') {
+      void (async () => {
+        const all = await listSessions();
+        if (!all.length) { pushSystem('no stored sessions'); return; }
+        pushSystem(['stored sessions:', ...all.slice(0, 8).map((entry) => `  ${entry.id}  ${entry.messages} msgs  ${entry.title}`)].join('\n'));
+      })();
+      return;
+    }
+    if (command.name === 'resume') {
+      void (async () => {
+        const id = command.args[0] ?? (await listSessions())[0]?.id;
+        if (!id) { pushSystem('nothing to resume'); return; }
+        const stored = await loadSession(id);
+        if (!stored) { pushSystem(`unknown session: ${id}`); return; }
+        sessionIdRef.current = stored.id;
+        clear();
+        hydrate(stored.messages);
+        pushSystem(`resumed ${stored.id} (${stored.messages.length} msgs)`);
+      })();
       return;
     }
     onSlashCommand?.(command.name, command.args);

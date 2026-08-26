@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Box, Text } from 'ink';
 import type { ComponentType } from 'react';
 import { ChatHome } from './ChatHome.js';
+import type { ChatMessage } from '../useTurn.js';
 import { ApprovalCard } from '../ApprovalCard.js';
 import type { TurnRunner } from '../turn.js';
 import {
@@ -23,6 +24,10 @@ export interface TuiRootProps {
   onExit: () => void;
   /** Screen components keyed by SlashScreen id. */
   screens: Partial<Record<SlashScreen, ComponentType>>;
+  /** Seeded transcript (CLI `sessions resume`). */
+  initialMessages?: ChatMessage[];
+  /** Disable latest-session auto-restore. */
+  autoResume?: boolean;
 }
 
 /**
@@ -30,7 +35,7 @@ export interface TuiRootProps {
  * slash commands navigate to management screens or suspend into real CLI
  * commands. Screens are rendered in place; Esc returns to the conversation.
  */
-export function TuiRoot({ screens = {}, runner, provider, model, mode, projectName, runSuspended, onExit }: TuiRootProps): React.ReactElement {
+export function TuiRoot({ screens = {}, runner, provider, model, mode, projectName, runSuspended, onExit, initialMessages, autoResume }: TuiRootProps): React.ReactElement {
   const [activeScreen, setActiveScreen] = useState<{ id: SlashScreen | null; arg?: string }>({ id: null });
 
   const handlers: SlashHandlers = useMemo(() => ({
@@ -76,6 +81,8 @@ export function TuiRoot({ screens = {}, runner, provider, model, mode, projectNa
         provider={provider}
         model={model}
         projectName={mode === 'project' ? projectName : undefined}
+        initialMessages={initialMessages}
+        autoResume={autoResume === false ? false : mode === 'project' || mode === 'global'}
       />
     </Box>
   );

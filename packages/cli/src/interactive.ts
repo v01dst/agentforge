@@ -11,7 +11,7 @@ import type { ComponentType } from 'react';
  *
  * Returns true when the TUI was launched (caller should not continue).
  */
-export async function launchInteractiveShell(): Promise<boolean> {
+export async function launchInteractiveShell(options: { initialMessages?: import('./ui/useTurn.js').ChatMessage[] } = {}): Promise<boolean> {
   if (!process.stdout.isTTY || process.env.AGENTFORGE_HEADLESS === '1' || process.env.TERM === 'dumb') {
     return false;
   }
@@ -129,6 +129,7 @@ export async function launchInteractiveShell(): Promise<boolean> {
       screens: screens as never,
       mode: detection.found ? 'project' : 'global',
       projectName,
+      initialMessages: options.initialMessages,
     });
 
   // Branded startup splash (~600ms), then the persistent TUI.

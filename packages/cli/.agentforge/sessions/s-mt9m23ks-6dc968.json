@@ -1,0 +1,21 @@
+{
+  "id": "s-mt9m23ks-6dc968",
+  "title": "go",
+  "createdAt": "2026-08-26T04:45:43.168Z",
+  "updatedAt": "2026-08-26T04:45:43.168Z",
+  "messages": [
+    {
+      "role": "system",
+      "text": "AgentForge ready — type a message to chat, or / for commands. /help lists everything."
+    },
+    {
+      "role": "user",
+      "text": "go"
+    },
+    {
+      "role": "assistant",
+      "text": "searched"
+    }
+  ],
+  "provider": "mock"
+}

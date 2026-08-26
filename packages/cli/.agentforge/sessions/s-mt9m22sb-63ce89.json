@@ -1,0 +1,29 @@
+{
+  "id": "s-mt9m22sb-63ce89",
+  "title": "first input",
+  "createdAt": "2026-08-26T04:45:42.548Z",
+  "updatedAt": "2026-08-26T04:45:42.548Z",
+  "messages": [
+    {
+      "role": "system",
+      "text": "AgentForge ready — type a message to chat, or / for commands. /help lists everything."
+    },
+    {
+      "role": "user",
+      "text": "first input"
+    },
+    {
+      "role": "assistant",
+      "text": "reply-to:first input"
+    },
+    {
+      "role": "user",
+      "text": "second input"
+    },
+    {
+      "role": "assistant",
+      "text": "reply-to:second input"
+    }
+  ],
+  "provider": "mock"
+}

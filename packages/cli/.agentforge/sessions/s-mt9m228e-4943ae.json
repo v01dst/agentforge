@@ -1,0 +1,13 @@
+{
+  "id": "s-mt9m228e-4943ae",
+  "title": "session",
+  "createdAt": "2026-08-26T04:45:41.294Z",
+  "updatedAt": "2026-08-26T04:45:41.294Z",
+  "messages": [
+    {
+      "role": "system",
+      "text": "AgentForge ready — type a message to chat, or / for commands. /help lists everything."
+    }
+  ],
+  "provider": "mock"
+}
