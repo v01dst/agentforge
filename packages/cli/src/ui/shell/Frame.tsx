@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Box, Text } from 'ink';
-import { asciiMode } from './theme.js';
+import { asciiMode, colors } from './theme.js';
 
 const BRAND_GLYPH = '◆';
 
@@ -27,9 +27,9 @@ export function brandLabel(): string {
 /** Mode badge text for the header center: dim cyan global or green project. */
 export function ModeBadge({ mode }: { mode?: FrameMode }) {
   if (!mode || mode.kind === 'global') {
-    return <Text color="cyan" dimColor>GLOBAL SESSION</Text>;
+    return <Text dimColor color={colors.accent}>GLOBAL SESSION</Text>;
   }
-  return <Text color="green">PROJECT: {mode.name}</Text>;
+  return <Text color={colors.uiOk}>PROJECT: {mode.name}</Text>;
 }
 
 /**
@@ -42,12 +42,13 @@ export function Frame({ children, mode, version, provider, model }: FrameProps) 
     <Box flexDirection="column" width="100%">
       <Box
         borderStyle="round"
+        borderColor={colors.border}
         flexDirection="column"
         paddingX={1}
         width="100%"
       >
         <Box justifyContent="space-between">
-          <Text bold color="cyan">{brand}</Text>
+          <Text bold color={colors.bannerTitle}>{brand}</Text>
           <ModeBadge mode={mode} />
           <Text dimColor>{version ? `v${version.replace(/^v/, '')}` : ''}</Text>
         </Box>

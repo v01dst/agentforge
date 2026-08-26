@@ -4,6 +4,13 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### TUI skin engine (v0.1 "Forge", phase A)
+
+- New semantic skin system (`packages/cli/src/ui/skin.ts`): three built-in skins — **forge** (gold/amber, default), **midnight** (cyan/indigo), **paper** (light) — with truecolor hex palettes that degrade to ANSI-256/plain automatically. Project `.agentforge/skin.json` and global `~/.agentforge/skin.json` override presets (palette-level merges supported); `AGENTFORGE_SKIN` env selects a preset.
+- `/skin [name]` slash command lists and switches skins, persisting the choice globally.
+- Startup splash redesigned: block-letter AGENT / FORGE wordmark in the skin's gold gradient ramp, tagline, mode/version/provider line, live pulse; compact ASCII fallback preserved.
+- Frame chrome, composer prompt, tool-event lines, and message roles now all read from the active skin at render time via live theme tokens.
+
 ### Versioning
 
 - The project is now branded **AgentForge v0.01** (`0.0.1`): a deliberate restart of the public version line. All workspace packages, scaffold templates, and the CLI banner report `0.0.1`.

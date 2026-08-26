@@ -1,14 +1,50 @@
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import { asciiMode } from './theme.js';
+import { asciiMode, colors } from './theme.js';
+import { currentSkin } from '../skin.js';
 
 const PULSE_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const PULSE_ASCII = ['|', '/', '-', '\\'];
 
+/** ANSI-shadow block letters, stacked two words to fit narrow terminals. */
+const WORDMARK_AGENT = [
+  '██╗    ██╗ ██████╗  ██████╗ ███╗   ██╗████████╗',
+  '██║    ██║██╔════╝ ██╔════╝ ████╗  ██║╚══██╔══╝',
+  '███████║██║  ███╗██║  ███╗██╔██╗ ██║   ██║   ',
+  '██╔══██║██║   ██║██║   ██║██║╚██╗██║   ██║   ',
+  '██║  ██║╚██████╔╝╚██████╔╝██║ ╚████║   ██║   ',
+  '╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ',
+];
+const WORDMARK_FORGE = [
+  '███████╗ ██████╗  ██████╗  ██████╗ ███████╗',
+  '██╔════╝ ██╔══██╗██╔════╝ ██╔════╝ ██╔════╝',
+  '█████╗  ██████╔╝██║  ███╗██║  ███╗█████╗  ',
+  '██╔══╝  ██╔══██╗██║   ██║██║   ██║██╔══╝  ',
+  '██║     ██║  ██║╚██████╔╝╚██████╔╝███████╗',
+  '╚═╝     ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚══════╝',
+];
+
+function Wordmark() {
+  const skin = currentSkin();
+  const c = skin.colors;
+  const ramp = [c.bannerTitle, c.bannerTitle, c.bannerAccent, c.bannerBorder, c.bannerDim, c.bannerDim];
+  return (
+    <Box flexDirection="column" alignItems="center">
+      {WORDMARK_AGENT.map((row, index) => (
+        <Text key={`a${index}`} color={ramp[index]}>{row}</Text>
+      ))}
+      <Text> </Text>
+      {WORDMARK_FORGE.map((row, index) => (
+        <Text key={`f${index}`} color={ramp[index]}>{row}</Text>
+      ))}
+    </Box>
+  );
+}
+
 /**
- * Branded startup splash: centered brand + version, mode line,
- * provider/model line, and a subtle braille pulse. Shown briefly
- * (~600ms) before the main TUI mounts.
+ * Branded startup splash: gold-gradient block-letter wordmark (forge skin),
+ * tagline, version/mode/provider line and a live pulse. Falls back to a
+ * compact single-line brand under ASCII/no-color terminals.
  */
 export function StartupBanner({
   version,
@@ -39,16 +75,26 @@ export function StartupBanner({
   }, []);
   const frames = asciiMode ? PULSE_ASCII : PULSE_FRAMES;
   const glyph = frames[frame % frames.length] ?? '';
+  if (asciiMode) {
+    return (
+      <Box flexDirection="column" alignItems="center" flexGrow={1} paddingY={1}>
+        <Text bold>{`AgentForge${version ? ` v${version.replace(/^v/, '')}` : ''}`}</Text>
+        <Text>{modeLine}</Text>
+        <Text>{glyph}</Text>
+      </Box>
+    );
+  }
   return (
     <Box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1} paddingY={1}>
-      <Text bold color="cyan">
-        {asciiMode ? '' : '◆ '}AgentForge{version ? ` v${version.replace(/^v/, '')}` : ''}
-      </Text>
-      <Text dimColor>{modeLine}</Text>
-      {provider || model ? (
-        <Text dimColor>{provider ?? ''}{model ? ` · ${model}` : ''}</Text>
-      ) : null}
-      <Text color="cyan">{glyph}</Text>
+      <Wordmark />
+      <Box marginTop={1} flexDirection="column" alignItems="center">
+        <Text color={colors.label}>forge agents · plugins · mcp · skills</Text>
+        <Text dimColor>{modeLine}{version ? ` · v${version.replace(/^v/, '')}` : ''}</Text>
+        {provider || model ? (
+          <Text dimColor>{provider ?? ''}{model ? ` · ${model}` : ''}</Text>
+        ) : null}
+        <Text color={colors.accent}>{glyph}</Text>
+      </Box>
     </Box>
   );
 }

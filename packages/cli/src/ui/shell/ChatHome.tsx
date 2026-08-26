@@ -5,6 +5,7 @@ import { useTurn } from '../useTurn.js';
 import type { ChatMessage } from '../useTurn.js';
 import type { TurnRunner } from '../turn.js';
 import { ActivityIndicator } from './Activity.js';
+import { colors } from './theme.js';
 import { validateProviderConnection } from '../../global-config.js';
 import type { GlobalProviderEntry } from '../../global-config.js';
 
@@ -58,18 +59,18 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
 const EXIT_CONFIRM_MS = 2000;
 
 function MessageRow({ message }: { message: ChatMessage }) {
-  if (message.role === 'user') return <Text><Text color="green">you › </Text>{message.text}</Text>;
+  if (message.role === 'user') return <Text><Text color={colors.uiOk}>you › </Text>{message.text}</Text>;
   if (message.role === 'system') return <Text dimColor>note › {message.text}</Text>;
   if (message.role === 'tool') {
     const ms = message.meta?.ms;
     return (
-      <Text dimColor>
-        {'\\u2699'} tool › {message.meta?.tool ?? message.text}
+      <Text color={colors.tool}>
+        {'⚙ tool › '}{message.meta?.tool ?? message.text}
         {ms !== undefined ? ` (${(ms / 1000).toFixed(1)}s)` : ''}
       </Text>
     );
   }
-  return <Text><Text color="cyan">agent › </Text>{message.text}</Text>;
+  return <Text><Text color={colors.accent}>agent › </Text>{message.text}</Text>;
 }
 
 /**
@@ -281,11 +282,11 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
       <Box flexDirection="column">
         {toolEvents.map((event) =>
           event.state === 'running' ? (
-            <Text key={`${event.name}-running`} color="cyan">
+            <Text key={`${event.name}-running`} color={colors.tool}>
               {'⠿ '}{event.name}{event.argsSummary ? ` ${event.argsSummary.slice(0, 60)}` : ''}
             </Text>
           ) : (
-            <Text key={`${event.name}-done`} dimColor color="green">
+            <Text key={`${event.name}-done`} color={colors.uiOk}>
               {'✓ '}{event.name}{event.ms !== undefined ? ` (${event.ms}ms)` : ''}
             </Text>
           ),
@@ -313,8 +314,8 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
             ))}
         </Box>
       ) : null}
-      <Box borderStyle="round" paddingX={1}>
-        <Text color="green">❯ </Text>
+      <Box borderStyle="round" borderColor={colors.border} paddingX={1}>
+        <Text color={colors.accent}>❯ </Text>
         <Text>{input}</Text>
         <Text dimColor>▏</Text>
       </Box>

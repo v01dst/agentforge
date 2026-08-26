@@ -208,6 +208,27 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
       run: () => ctx.runSuspended(() => pluginsCommand({})),
     },
     {
+      name: 'skin',
+      description: 'Switch the TUI skin: forge | midnight | paper',
+      usage: '/skin [name]',
+      category: 'config',
+      run: async (args, cmdCtx) => {
+        const { BUILT_IN_SKINS, listSkinNames, resolveSkin, saveSkinSelection, setActiveSkin } = await import('../../ui/skin.js');
+        const target = args[0];
+        if (!target || !BUILT_IN_SKINS[target]) {
+          const current = (await resolveSkin()).skin.name;
+          const lines = listSkinNames().map((name) => `${name === current ? '›' : ' '} ${name.padEnd(9)} ${BUILT_IN_SKINS[name]?.description ?? ''}`);
+          cmdCtx.pushSystem(`skins (current: ${current})\n  ${lines.join('\n  ')}\nSwitch with /skin <name>`);
+          if (target && !BUILT_IN_SKINS[target]) return;
+          return;
+        }
+        await saveSkinSelection({ skin: target }, process.cwd(), true);
+        setActiveSkin((await resolveSkin({ name: target })).skin);
+        cmdCtx.refreshStatus();
+        cmdCtx.pushSystem(`skin set to ${target} (saved to ~/.agentforge/skin.json)`);
+      },
+    },
+    {
       name: 'agents',
       description: 'Pick an agent entry to run',
       usage: '/agents',

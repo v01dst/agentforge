@@ -28,6 +28,8 @@ export async function execute(argv: string[] = process.argv.slice(2)): Promise<n
   const parsed = parseArgs(argv);
   const cwd = typeof parsed.flags.cwd === 'string' ? parsed.flags.cwd : undefined;
   if (cwd) process.chdir(cwd);
+  const { resolveSkin, setActiveSkin } = await import('./ui/skin.js');
+  setActiveSkin((await resolveSkin({ cwd })).skin);
   if (parsed.flags.help) { info(HELP); return 0; }
   if (parsed.flags.version) { info(VERSION); return 0; }
   if (!parsed.command) {

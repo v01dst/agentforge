@@ -1,12 +1,26 @@
 /** Tiny theme module for the AgentForge shell — pure string helpers, no React. */
 
-/** Color tokens used across the shell (values are standard Ink color names). */
+import { currentSkin } from '../skin.js';
+
+/**
+ * Color tokens used across the shell. Values resolve from the active skin at
+ * access time, so components can keep using `colors.accent` statically while
+ * `/skin` changes retheme every subsequent render. Hex values degrade to
+ * ANSI-256 or plain text automatically under chalk's level detection.
+ */
 export const colors = {
-  accent: 'cyan',
-  success: 'green',
-  warn: 'yellow',
-  error: 'red',
-  dim: 'gray',
+  get accent() { return currentSkin().colors.uiAccent; },
+  get success() { return currentSkin().colors.uiOk; },
+  get uiOk() { return currentSkin().colors.uiOk; },
+  get warn() { return currentSkin().colors.uiWarn; },
+  get error() { return currentSkin().colors.uiError; },
+  get dim() { return currentSkin().colors.bannerDim; },
+  get tool() { return currentSkin().colors.uiTool; },
+  get thinking() { return currentSkin().colors.uiThinking; },
+  get label() { return currentSkin().colors.uiLabel; },
+  get border() { return currentSkin().colors.bannerBorder; },
+  get text() { return currentSkin().colors.bannerText; },
+  get bannerTitle() { return currentSkin().colors.bannerTitle; },
 } as const;
 
 /** True when the terminal cannot render Unicode spinners/box-drawing. */
