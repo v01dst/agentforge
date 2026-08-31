@@ -2,7 +2,9 @@
 
 All notable changes to AgentForge are documented here.
 
-## [Unreleased]
+## [0.5.0] — 2026-08-31
+
+Feature wave two (multi-project adoption plan, phases H, I, P, Q, R, T).
 
 ### Session modes (Phase T — multi-project plan)
 
