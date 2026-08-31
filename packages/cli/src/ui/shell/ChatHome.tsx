@@ -7,6 +7,7 @@ import type { TurnRunner } from '../turn.js';
 import { ActivityIndicator } from './Activity.js';
 import { colors } from './theme.js';
 import { listSessions, loadSession, newSessionId, renameSession, saveSession, SESSION_SCHEMA_VERSION, compactTranscript } from '../../sessions/store.js';
+import { appendSessionLog, forkSession, loadFullTranscript } from '../../sessions/log.js';
 import { loadMemory } from '../../memory/store.js';
 import { listAgentsSync, extractAgentMentions } from '../../agents/agents.js';
 import { validateProviderConnection } from '../../global-config.js';
@@ -51,6 +52,8 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { name: 'build', description: 'Switch to build mode (workspace-write posture)' },
   { name: 'tools', description: 'List available tools' },
   { name: 'skills', description: 'List or toggle agent skills', usage: '/skills [name]' },
+  { name: 'fork', description: 'Fork this or another session into a new one', usage: '/fork [id]' },
+  { name: 'transcript', description: 'Show the full uncompacted transcript from the durable log', usage: '/transcript [id]' },
   { name: 'agents', description: 'List registered agents' },
   { name: 'workflows', description: 'List available workflows' },
   { name: 'runs', description: 'Inspect recent runs' },
@@ -101,6 +104,8 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
   const createdAtRef = useRef<string | null>(null);
   /** Interrupt-and-redirect (Phase D): text queued while a turn was running. */
   const redirectRef = useRef<string | null>(null);
+  /** Phase H: how many live messages are already in the durable NDJSON log. */
+  const loggedCountRef = useRef(0);
   const [input, setInput] = useState(initialInput ?? '');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -149,12 +154,25 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
 
   // Autosave whenever the transcript changes while idle. Long transcripts are
   // compacted on disk (recent tail + rolling summary); the live view is intact.
+  // Phase H: every message is also appended to the NDJSON log-as-truth, which
+  // is never compacted — forks replay from it.
   useEffect(() => {
     if (running || messages.length === 0) return;
     if (!createdAtRef.current) createdAtRef.current = new Date().toISOString();
     const compaction = compactTranscript(messages);
     if (compaction.summary) summaryRef.current = [summaryRef.current, compaction.summary].filter(Boolean).join('\n\n');
     const derivedTitle = messages.find((entry) => entry.role === 'user')?.text.slice(0, 48) ?? 'session';
+    const pending = messages.slice(loggedCountRef.current);
+    if (pending.length) {
+      loggedCountRef.current = messages.length;
+      void (async () => {
+        for (const entry of pending) {
+          try {
+            await appendSessionLog(sessionIdRef.current, { type: entry.role, text: entry.text });
+          } catch { /* log append is best-effort; snapshot remains */ }
+        }
+      })();
+    }
     void saveSession({
       id: sessionIdRef.current,
       title: titleRef.current ?? derivedTitle,
@@ -260,6 +278,7 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
       titleRef.current = null;
       createdAtRef.current = null;
       summaryRef.current = undefined;
+      loggedCountRef.current = 0;
       pushSystem('new session started');
       return;
     }
@@ -312,6 +331,27 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
       })();
       return;
     }
+    if (command.name === 'fork') {
+      void (async () => {
+        const id = command.args[0] ?? sessionIdRef.current;
+        const result = await forkSession(id, { cwd: process.cwd() });
+        if (!result) { pushSystem(`unknown session: ${id}`); return; }
+        pushSystem(`forked ${result.from} → ${result.session.id} (${result.copied} msgs). /resume ${result.session.id} to continue it.`);
+      })();
+      return;
+    }
+    if (command.name === 'transcript') {
+      void (async () => {
+        const id = command.args[0] ?? sessionIdRef.current;
+        const full = await loadFullTranscript(id, process.cwd());
+        if (!full.length) { pushSystem(`no durable transcript for ${id} (sessions from before 0.4.0 only keep the compacted snapshot — /show shows it)`); return; }
+        pushSystem([
+          `full transcript ${id} — ${full.length} message(s) from the log-as-truth`,
+          ...full.slice(-12).map((entry) => `  ${entry.role} › ${entry.text.length > 120 ? `${entry.text.slice(0, 120)}…` : entry.text.replace(/\n/g, ' ')}`),
+        ].join('\n'));
+      })();
+      return;
+    }
     if (command.name === 'resume') {
       void (async () => {
         const id = command.args[0] ?? (await listSessions())[0]?.id;
@@ -321,6 +361,9 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
         sessionIdRef.current = stored.id;
         clear();
         hydrate(stored.messages);
+        // Restored history is already durable (snapshot + log); only new
+        // turns append to the log from here.
+        loggedCountRef.current = stored.messages.length;
         pushSystem(`resumed ${stored.id} (${stored.messages.length} msgs)`);
       })();
       return;

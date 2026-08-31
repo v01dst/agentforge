@@ -992,7 +992,7 @@ data · "model-visible means logged" · one policy layer everywhere · everythin
 | Ver | Phases |
 | --- | --- |
 | 0.4.0 | A memory core ✅ · N plugin kernel + interceptor seam ✅ · B skills upgrade ✅ · C reflection ✅ · D loop upgrades ✅ · F agents/subagents ✅ · G permissions v2 ✅ |
-| 0.5.0 | H session manager (NDJSON log-as-truth) · I LSP bridge · P profiles · Q observability core · R security findings · T session modes |
+| 0.5.0 | H session log-as-truth + fork ✅ · I LSP bridge · P profiles · Q observability core · R security findings · T session modes |
 | 0.6.0 | J gateway serve (+OpenAI-compatible agent-as-model) · K daemon + heartbeat · S benchmarking |
 | 0.7.0 | L channel adapters (webhook + Telegram) · M device tools |
 
@@ -1056,6 +1056,13 @@ Phase G — permissions v2 (landed):
 - [x] Unknown rule qualifiers rejected at load (fail closed).
 - [x] Doom-loop guard as a `preTool` interceptor (denies 3rd identical consecutive call); wired into every coding session.
 - [x] Tests: +7 suites; CLI suite 193 green.
+
+Phase H — session log-as-truth + forking (landed):
+
+- [x] NDJSON durable logs beside snapshots: append per turn, never compacted, corrupt-tail tolerant.
+- [x] `forkSession`: full-log replay into a fresh session, `forkedFrom` lineage, `upTo` prefix cuts, snapshot+summary fallback for legacy sessions.
+- [x] Surfaces: `sessions fork|transcript` CLI, `/fork` + `/transcript` TUI slash commands; autosave appends without double-logging resumed history.
+- [x] Tests: 8 new; TUI autosave assertion updated; CLI suite 201 green.
 
 ## 16. Definition of “Ready to Use”
 

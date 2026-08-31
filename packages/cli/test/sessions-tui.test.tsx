@@ -31,15 +31,18 @@ test('ChatHome autosaves the transcript after a turn settles', async () => {
     for (let i = 0; i < 30; i += 1) {
       await delay(50);
       const dir = join(project, '.agentforge', 'sessions');
-      try { if ((await readdir(dir)).length === 1) break; } catch { /* not yet */ }
+      try { if ((await readdir(dir)).some((file) => file.endsWith('.json'))) break; } catch { /* not yet */ }
     }
     instance.unmount();
     await delay(150);
 
     const dir = join(project, '.agentforge', 'sessions');
     const files = await readdir(dir);
-    assert.equal(files.length, 1);
-    const stored = JSON.parse(await readFile(join(dir, files[0] as string), 'utf8')) as { messages: Array<{ role: string; text: string }> };
+    // Phase H: the snapshot (.json) plus the durable NDJSON log.
+    const snapshot = files.find((file) => file.endsWith('.json'));
+    assert.ok(snapshot, 'snapshot written');
+    assert.ok(files.includes(`${snapshot!.replace(/\.json$/, '')}.ndjson`), 'durable log written beside the snapshot');
+    const stored = JSON.parse(await readFile(join(dir, snapshot as string), 'utf8')) as { messages: Array<{ role: string; text: string }> };
     assert.ok(stored.messages.some((m) => m.text === 'hello durable world'));
     assert.ok(stored.messages.some((m) => m.text.includes('reply-to:ping')));
     assert.ok(stored.messages.some((m) => m.text === 'hello durable world'));

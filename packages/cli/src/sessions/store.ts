@@ -17,6 +17,8 @@ export interface StoredSession {
   version?: 1;
   /** Rolling summary of turns removed by compaction (see compactTranscript). */
   summary?: string;
+  /** Set when this session was created by forking another (Phase H). */
+  forkedFrom?: string;
 }
 
 export const SESSION_SCHEMA_VERSION = 1 as const;

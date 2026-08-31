@@ -835,7 +835,31 @@ export async function sessionsCommand(args: string[], flags: Record<string, stri
     });
     return launched ? 0 : 1;
   }
-  throw new Error(`Unknown sessions subcommand: ${sub}. Usage: agentforge sessions [list|resume|rename|export|prune|delete].`);
+  if (sub === 'fork') {
+    const { forkSession } = await import('./sessions/log.js');
+    const result = await forkSession(id ?? '', {
+      title: flagString(flags, 'title'),
+      upTo: flagString(flags, 'up-to') !== undefined ? Number(flagString(flags, 'up-to')) : undefined,
+      global: flagBoolean(flags, 'global') || undefined,
+    });
+    if (!result) throw new Error(`Unknown session: ${id ?? '(none)'}`);
+    if (flagBoolean(flags, 'json')) { printJson({ forkedFrom: result.from, id: result.session.id, copied: result.copied, title: result.session.title }); return 0; }
+    success(`Forked ${result.from} → ${result.session.id} (${result.copied} msgs, '${result.session.title}').`);
+    hint(`Resume it with: agentforge sessions resume ${result.session.id}`);
+    return 0;
+  }
+  if (sub === 'transcript') {
+    const { loadFullTranscript } = await import('./sessions/log.js');
+    const target = id ?? args[1];
+    if (!target) throw new Error('Usage: agentforge sessions transcript <id>.');
+    const full = await loadFullTranscript(target);
+    if (flagBoolean(flags, 'json')) { printJson({ id: target, messages: full }); return 0; }
+    if (!full.length) throw new Error(`No durable transcript for ${target}.`);
+    info(`Full transcript ${target} — ${full.length} message(s):`);
+    for (const message of full) stdout.write(`  ${message.role} › ${message.text}\n`);
+    return 0;
+  }
+  throw new Error(`Unknown sessions subcommand: ${sub}. Usage: agentforge sessions [list|resume|rename|export|prune|fork|transcript|delete].`);
 }
 
 export async function permissionsCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {

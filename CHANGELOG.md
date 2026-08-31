@@ -2,6 +2,15 @@
 
 All notable changes to AgentForge are documented here.
 
+## [Unreleased]
+
+### Session log-as-truth + forking (Phase H — multi-project plan)
+
+- Durable NDJSON session logs (`.agentforge/sessions/<id>.ndjson`): every conversation turn appends one JSON line (`ts`, `type`, `text`, optional `meta`) forever. The JSON snapshot stays the fast, compacted view for loads and listing; the log is the truth — compaction never rewrites it and forks replay from it. Corrupt trailing lines are skipped on read, never discarded on write.
+- Session forking: `forkSession(id, { title, upTo, global })` replays the parent's full uncompacted log into a fresh session (`<newid>-f`), records `forkedFrom` lineage, and writes both snapshot and replayed log. `upTo` cuts at a prefix (negative counts from the end); legacy sessions without a log fork from the snapshot with the compaction summary riding along as a system message. A fork's history is never truncated by the parent's compaction.
+- New surfaces: `agentforge sessions fork <id> [--up-to N] [--title t] [--global] [--json]`, `agentforge sessions transcript <id> [--json]` (full uncompacted transcript), TUI `/fork [id]` and `/transcript [id]` slash commands. Chat autosave appends each new turn to the log; resumed history is not double-logged.
+- Tests: 8 new log/fork suites; TUI autosave test updated to assert the durable log beside the snapshot; CLI suite 201 green.
+
 ## [0.4.0] — 2026-08-31
 
 Feature wave one (multi-project adoption plan, phases A, N, B, C, D, F, G — re-expressed
