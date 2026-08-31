@@ -8,6 +8,16 @@ import { buildAgentRunner } from '../src/coding-session.js';
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Poll until the predicate holds or the deadline passes (background review is async). */
+async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 3000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return true;
+    await sleep(25);
+  }
+  return predicate();
+}
+
 async function withTemp(fn: (root: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), 'af-reflect-'));
   try {
@@ -64,7 +74,10 @@ test('enabled reflection reviews in the background and writes memory through gat
     // Simulate the loop seam directly: record input, then stop the turn.
     for (const hook of runtime.interceptors.preStep ?? []) await hook({ input: 'remember this lesson: save this lesson', runId: 'r1' });
     for (const hook of runtime.interceptors.turnStopping ?? []) await hook({ output: 'answer', iterations: 1 });
-    await sleep(50);
+    const written = await waitFor(async () => {
+      try { await readFile(join(root, '.agentforge', 'memories', 'MEMORY.md'), 'utf8'); return true; } catch { return false; }
+    });
+    assert.ok(written, 'reviewer wrote memory in the background');
     assert.ok(reviewModelCalls >= 1, 'reviewer ran');
     const raw = await readFile(join(root, '.agentforge', 'memories', 'MEMORY.md'), 'utf8');
     assert.match(raw, /pnpm test first/);

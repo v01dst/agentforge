@@ -48,7 +48,7 @@ export async function globalConfigDir(dir = join(homedir(), '.agentforge')): Pro
 function normalizeConfig(value: unknown): GlobalConfig {
   if (!isRecord(value)) return { providers: [], recentProjects: [], sessionHistory: true };
   const providers = Array.isArray(value.providers) ? value.providers.filter(isRecord) : [];
-  return {
+  const normalized: GlobalConfig = {
     defaultProvider: typeof value.defaultProvider === 'string' ? value.defaultProvider : undefined,
     defaultModel: typeof value.defaultModel === 'string' ? value.defaultModel : undefined,
     providers: providers.map((entry) => {
@@ -63,14 +63,15 @@ function normalizeConfig(value: unknown): GlobalConfig {
     }),
     recentProjects: Array.isArray(value.recentProjects) ? value.recentProjects.filter((p): p is string => typeof p === 'string') : [],
     sessionHistory: value.sessionHistory !== false,
-    reflection: isRecord(value.reflection)
-      ? {
-          enabled: value.reflection.enabled === true,
-          provider: typeof value.reflection.provider === 'string' ? value.reflection.provider : undefined,
-          model: typeof value.reflection.model === 'string' ? value.reflection.model : undefined,
-        }
-      : undefined,
   };
+  if (isRecord(value.reflection)) {
+    normalized.reflection = {
+      enabled: value.reflection.enabled === true,
+      provider: typeof value.reflection.provider === 'string' ? value.reflection.provider : undefined,
+      model: typeof value.reflection.model === 'string' ? value.reflection.model : undefined,
+    };
+  }
+  return normalized;
 }
 
 /** Read the global config, returning sane defaults when absent or malformed. */
