@@ -17,3 +17,6 @@ coverage/
 
 # Playground local run history (JSONL store)
 /apps/playground/.agentforge/
+
+# Local session artifacts (any package running the CLI against itself)
+**/.agentforge/sessions/

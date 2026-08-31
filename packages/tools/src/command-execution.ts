@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
 import { defineTool } from './tool.js';
@@ -9,11 +9,19 @@ const runFile = promisify(execFile);
 
 const DEFAULT_BLOCKED_PATTERNS: RegExp[] = [
   /\brm\s+(?:-{1,2}[\w-]+\s+)*-?[rf][\w-]*\s+\/(?:\s|$)/,
+  /\brm\s+(?:-{1,2}[\w-]+\s+)*-?[rf][\w-]*\s+(?:~|\*|\.|\.\.|\$HOME)(?:\s|$)/,
   /\bsudo\b/,
+  /^(?:sudo\s+)*su\s+/,
   /\bchmod\s+(?:-{1,2}[\w-]+\s+)*777\s+\//,
+  /\bchown\s+(?:-{1,2}[\w-]+\s+)*\S+\s+\//,
   /\bmkfs(?:\.\w+)?\b/,
+  /\bwipefs\b/,
   /\bdd\s+if=\/dev\//,
+  /\bdd\s+of=\/dev\//,
+  /^(?:sudo\s+)*(?:shutdown|reboot|halt|poweroff|init\s+0|init\s+6)\b/,
   /:\(\)\s*\{\s*:\|:&\s*;?\s*\}\s*;?\s*:/,
+  /\bcurl\b[^&|;]*\|\s*(?:ba)?sh\b/,
+  /\bwget\b[^&|;]*\|\s*(?:ba)?sh\b/,
 ];
 
 const SHELL_METACHARACTERS = [';', '&&', '|', '`', '$(', '>', '<'];
@@ -82,6 +90,34 @@ async function safeExecFile(command: string, args: string[], options: SafeExecOp
   }
 }
 
+/** Absolute paths an allowlisted program may still reference from outside the workspace. */
+const SAFE_ABSOLUTE_PATHS = new Set(['/dev/null']);
+
+/**
+ * Rejects path-like arguments that resolve outside the workspace root:
+ * absolute paths, `..` escapes, and `--flag=<path>` values. Without a shell,
+ * reading or writing outside the root requires the program itself to receive
+ * such a path — so this closes the `cat /etc/passwd` class of exfiltration.
+ */
+function assertArgsStayInWorkspace(args: string[], root: string): void {
+  for (const arg of args) {
+    const candidate = /^--?[^=]+=/.test(arg) ? arg.slice(arg.indexOf('=') + 1) : arg;
+    if (!candidate) continue;
+    const pathLike = isAbsolute(candidate) || candidate === '~' || candidate.startsWith('~/') || candidate === '.' || candidate === '..' || candidate.startsWith('./') || candidate.startsWith('../');
+    if (!pathLike) continue;
+    // `~` points at the user's home, always outside the workspace.
+    if (candidate === '~' || candidate.startsWith('~/')) {
+      throw new CommandBlockedError(`Path argument '${candidate}' resolves outside the workspace root (${root})`);
+    }
+    const expanded = resolve(root, candidate);
+    if (SAFE_ABSOLUTE_PATHS.has(expanded)) continue;
+    const rel = relative(root, expanded);
+    if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+      throw new CommandBlockedError(`Path argument '${candidate}' resolves outside the workspace root (${root})`);
+    }
+  }
+}
+
 function assertCommandLineSafe(command: string, args: string[], allowedCommands: string[], blockedPatterns: RegExp[]): void {
   if (!allowedCommands.includes(command)) {
     throw new CommandBlockedError(`Command ${command} is not allowlisted`);
@@ -105,6 +141,8 @@ export interface RunCommandToolOptions {
   root: string;
   allowedCommands: string[];
   blockedPatterns?: RegExp[];
+  /** Reject path-like arguments resolving outside the workspace root. Default true. */
+  restrictPathArgs?: boolean;
   timeoutMs?: number;
   maxBuffer?: number;
 }
@@ -112,9 +150,10 @@ export interface RunCommandToolOptions {
 export function createRunCommandTool(options: RunCommandToolOptions) {
   const root = resolve(options.root);
   const blockedPatterns = options.blockedPatterns ?? DEFAULT_BLOCKED_PATTERNS;
+  const restrictPathArgs = options.restrictPathArgs ?? true;
   return defineTool({
     name: 'run_command',
-    description: 'Execute an allowlisted program inside the workspace root without a shell.',
+    description: 'Execute an allowlisted program inside the workspace root without a shell. Path arguments must stay inside the workspace.',
     permissions: ['process:execute'],
     timeoutMs: options.timeoutMs ?? 120_000,
     input: z.object({ command: z.string(), args: z.array(z.string()).default([]) }),
@@ -128,6 +167,7 @@ export function createRunCommandTool(options: RunCommandToolOptions) {
     async execute(input) {
       const args = input.args ?? [];
       assertCommandLineSafe(input.command, args, options.allowedCommands, blockedPatterns);
+      if (restrictPathArgs) assertArgsStayInWorkspace(args, root);
       const result = await safeExecFile(input.command, args, {
         cwd: root,
         timeoutMs: options.timeoutMs,

@@ -76,6 +76,34 @@ function makeSafePath(root: string) {
   };
 }
 
+/**
+ * Basenames that are refused by read tools by default: credential and
+ * secret-bearing files. `.env.example` is explicitly allowed.
+ */
+export const SECRET_FILE_BASENAMES = new Set([
+  '.env',
+  '.netrc',
+  '.git-credentials',
+  '.htpasswd',
+  'id_rsa',
+  'id_dsa',
+  'id_ecdsa',
+  'id_ed25519',
+]);
+
+/** Returns true when a workspace-relative path points at a secret-bearing file. */
+export function isSecretFilePath(relPath: string): boolean {
+  const segments = relPath.split('/');
+  const basename = segments[segments.length - 1] ?? '';
+  if (!basename) return false;
+  if (basename === '.env.example') return false;
+  if (SECRET_FILE_BASENAMES.has(basename)) return true;
+  if (basename.startsWith('.env.')) return true;
+  if (segments.includes('.ssh')) return true;
+  if (/\.(pem|key|p12|pfx|keystore)$/.test(basename)) return true;
+  return false;
+}
+
 export interface ListFilesToolOptions {
   root: string;
   /** Maximum number of file entries returned before truncation. Default 5_000. */
@@ -141,6 +169,8 @@ export interface ReadFileToolOptions {
   root: string;
   /** Maximum number of bytes read from any single file. Default 256 KiB. */
   maxBytes?: number;
+  /** Allow reading credential/secret files (.env, keys, id_rsa, ...). Default false. */
+  allowSecretFiles?: boolean;
 }
 
 const readFileInput = z.object({
@@ -157,9 +187,10 @@ export function createReadFileTool(options: ReadFileToolOptions) {
   const root = resolve(options.root);
   const safePath = makeSafePath(root);
   const maxBytes = options.maxBytes ?? 262_144;
+  const allowSecretFiles = options.allowSecretFiles ?? false;
   return defineTool({
     name: 'read_file',
-    description: 'Read a bounded slice of a file inside the workspace root.',
+    description: 'Read a bounded slice of a file inside the workspace root. Credential and secret files are refused by default.',
     permissions: ['filesystem:read'],
     timeoutMs: 15_000,
     input: readFileInput,
@@ -175,6 +206,10 @@ export function createReadFileTool(options: ReadFileToolOptions) {
       path: string; totalLines: number; startLine: number; content: string; bytes: number; truncated: boolean;
     }> {
       const full = safePath(input.path);
+      const rel = relative(root, full);
+      if (!allowSecretFiles && isSecretFilePath(rel)) {
+        throw new Error(`Refusing to read '${input.path}': secret/credential files are protected. Enable allowSecretFiles explicitly to override.`);
+      }
       const buffer = await readFile(full);
       const bytes = Math.min(buffer.byteLength, maxBytes);
       const truncatedBySize = buffer.byteLength > maxBytes;
@@ -275,6 +310,7 @@ export function createSearchTextTool(options: SearchTextToolOptions) {
             continue;
           }
           if (isIgnored(rel, false, rules)) continue;
+          if (isSecretFilePath(rel)) continue;
           if (globFilter && !globFilter.test(rel)) continue;
           if (info.size > 1_000_000) continue;
           let text: string;
