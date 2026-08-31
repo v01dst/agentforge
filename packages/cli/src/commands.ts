@@ -1281,3 +1281,35 @@ export async function benchmarksCommand(args: string[], flags: Record<string, st
   }
   throw new Error('Usage: agentforge benchmarks [list|run <id>|results].');
 }
+
+/** Channels (Phase L): webhook + Telegram adapters into the agent. */
+export async function channelsCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
+  const [sub] = args;
+  const { buildAgentRunner } = await import('./coding-session.js');
+  const runnerTurn = buildAgentRunner({ observability: false });
+  const runner = async (text: string, sender: string): Promise<string> => {
+    let output = '';
+    for await (const delta of runnerTurn(text, new AbortController().signal, {} as never)) output += delta.text ?? '';
+    return output || `(empty reply for ${sender})`;
+  };
+  if (sub === 'webhook') {
+    const { createWebhookServer, listenWebhook } = await import('./channels/channels.js');
+    const server = createWebhookServer({ runner, secret: flagString(flags, 'secret') ?? process.env.AGENTFORGE_WEBHOOK_SECRET });
+    const port = Number(flagString(flags, 'port') ?? '8788');
+    const bound = await listenWebhook(server, port, flagString(flags, 'host') ?? '127.0.0.1');
+    success(`Webhook channel listening on http://127.0.0.1:${bound}/hook${flagString(flags, 'secret') || process.env.AGENTFORGE_WEBHOOK_SECRET ? ' (secret required)' : ' (no secret — dev only)'}`);
+    hint('POST /hook {"sender":"you","text":"hi"} · Ctrl-C to stop.');
+    await new Promise<void>((resolveRun) => process.once('SIGINT', () => { server.close(() => resolveRun()); resolveRun(); }));
+    return 0;
+  }
+  if (sub === 'telegram') {
+    const { runTelegramLoop } = await import('./channels/channels.js');
+    const token = flagString(flags, 'token') ?? process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) throw new Error('Telegram needs a bot token: --token or TELEGRAM_BOT_TOKEN.');
+    const allowed = flagString(flags, 'allow-chat')?.split(',').map(Number).filter(Number.isFinite);
+    info('Telegram channel: long-polling. Ctrl-C to stop.');
+    await runTelegramLoop({ token, runner, allowedChatIds: allowed ? new Set(allowed) : undefined });
+    return 0;
+  }
+  throw new Error('Usage: agentforge channels [webhook [--port <n>] [--secret <s>] | telegram [--token <t>] [--allow-chat <ids>]].');
+}

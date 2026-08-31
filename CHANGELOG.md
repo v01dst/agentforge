@@ -2,6 +2,15 @@
 
 All notable changes to AgentForge are documented here.
 
+## [Unreleased]
+
+### Channel adapters: webhook + Telegram (Phase L — multi-project plan)
+
+- Generic webhook channel (`agentforge channels webhook [--port 8788] [--secret <s>]`): `POST /hook` with `{ sender, text }` runs the prompt through the session runner and returns `{ reply }`. Shared-secret verification supports a plain header (`X-AgentForge-Secret`) and HMAC-SHA256 body signatures (`X-Signature: sha256=…`, timing-safe compare); missing secret means dev-mode (warned in startup output).
+- Telegram channel (`agentforge channels telegram [--token|--env TELEGRAM_BOT_TOKEN] [--allow-chat <ids>]`): Bot API long-polling — no inbound ports. Offset-tracked `getUpdates` loop, `sendMessage` replies, optional chat-id allowlist, and error-resilient polling (failures surface via a callback and retry; the loop exits on abort).
+- Both adapters are thin transports over the same runner seam — policy, sessions, and logging stay in the runner.
+- Tests: 5 suites (webhook round-trips, both secret paths, telegram dispatch/allowlist/error-resilience against a mocked Bot API).
+
 ## [0.6.0] — 2026-08-31
 
 Feature wave three (multi-project adoption plan, phases J, K, S).
