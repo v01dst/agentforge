@@ -2,7 +2,9 @@
 
 All notable changes to AgentForge are documented here.
 
-## [Unreleased]
+## [0.6.0] — 2026-08-31
+
+Feature wave three (multi-project adoption plan, phases J, K, S).
 
 ### Benchmarking, deterministic-only (Phase S — multi-project plan)
 
