@@ -4,6 +4,13 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### Profiles (Phase P — multi-project plan)
+
+- Named profile bundles: `~/.agentforge/profiles.json` (global) and `.agentforge/profiles.json` (project, shadows global by name). A profile pins `provider`, `model`, and optionally a `permissionMode` posture — e.g. `fast` (haiku + read-only) vs `deep` (sonnet + workspace-write).
+- CLI: `agentforge profile list|save <name> --provider --model --mode [--scope project|global]|use <name>|current|remove <name>` (`--json` on list). `profile use` sets `AGENTFORGE_PROVIDER`/`AGENTFORGE_MODEL` for the session, applies the posture through the permission layer, and records the active flag; explicit environment variables always win over profile values.
+- TUI: `/profile [name]` lists and activates profiles inline.
+- Validation fails loudly (names, postures); tests cover store merging, shadowing, active flags, and environment precedence. CLI suite 213 green.
+
 ### LSP bridge (Phase I — multi-project plan)
 
 - Real JSON-RPC 2.0 LSP client over stdio with Content-Length framing (`packages/cli/src/lsp/lsp.ts`): lazy per-language server lifecycle, request timeouts that fail honestly instead of hanging, notification collection, crash propagation.

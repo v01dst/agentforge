@@ -275,6 +275,35 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
       },
     },
     {
+      name: 'profile',
+      description: 'Apply a saved profile (provider/model/posture bundle)',
+      usage: '/profile [name]',
+      argsHint: ['name'],
+      category: 'config',
+      run: async (args, cmdCtx) => {
+        const { listProfiles, getProfile, activeProfileName, setActiveProfile, resolveProfileToEnvValues } = await import('../../profiles/profiles.js');
+        const name = args[0];
+        if (!name) {
+          const [profiles, active] = await Promise.all([listProfiles(), activeProfileName()]);
+          if (!profiles.length) { cmdCtx.pushSystem('no profiles saved — create one with: agentforge profile save <name> --provider <p> --model <m>'); return; }
+          cmdCtx.pushSystem(['profiles:', ...profiles.map((profile) => `  ${profile.name}${profile.name === active ? ' [active]' : ''}  ${[profile.provider, profile.model].filter(Boolean).join('/') || '(session defaults)'}${profile.permissionMode ? ` · ${profile.permissionMode}` : ''}`)].join('\n'));
+          return;
+        }
+        const profile = await getProfile(name);
+        if (!profile) { cmdCtx.pushSystem(`✗ unknown profile '${name}'`); return; }
+        const values = resolveProfileToEnvValues(profile);
+        if (values.provider) process.env.AGENTFORGE_PROVIDER = values.provider;
+        if (values.model) process.env.AGENTFORGE_MODEL = values.model;
+        if (values.permissionMode) {
+          const { setPermissionMode } = await import('../../permissions.js');
+          setPermissionMode(values.permissionMode);
+        }
+        await setActiveProfile(name, 'global');
+        cmdCtx.refreshStatus();
+        cmdCtx.pushSystem(`profile '${name}' active: ${[values.provider, values.model].filter(Boolean).join('/') || '(session defaults)'}${values.permissionMode ? ` · ${values.permissionMode}` : ''}`);
+      },
+    },
+    {
       name: 'agents',
       description: 'Pick an agent entry to run',
       usage: '/agents',

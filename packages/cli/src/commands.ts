@@ -1021,3 +1021,61 @@ export async function inspectCommand(runId: string | undefined, flags: Record<st
   if (flagBoolean(flags, 'json')) printJson(result); else printJson(result);
   return 0;
 }
+
+/** Profiles (Phase P): named provider/model/posture bundles. */
+export async function profileCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
+  const { listProfiles, getProfile, saveProfile, removeProfile, activeProfileName, setActiveProfile, resolveProfileToEnvValues } = await import('./profiles/profiles.js');
+  const [sub, name] = args;
+  if (!sub || sub === 'list' || sub === 'ls') {
+    const profiles = await listProfiles();
+    const active = await activeProfileName();
+    if (flagBoolean(flags, 'json')) { printJson({ active, profiles }); return 0; }
+    heading('Profiles (~/.agentforge/profiles.json, .agentforge/profiles.json)');
+    if (!profiles.length) { hint('No profiles yet. Create one with: agentforge profile save <name> --provider <p> --model <m> [--mode read-only|ask|workspace-write|trusted]'); return 0; }
+    for (const profile of profiles) {
+      info(`  ${profile.name}${profile.name === active ? ' [active]' : ''}  ${[profile.provider, profile.model].filter(Boolean).join('/') || '(session defaults)'}${profile.permissionMode ? ` · ${profile.permissionMode}` : ''}`);
+    }
+    hint('Activate with: agentforge profile use <name>');
+    return 0;
+  }
+  if (sub === 'save') {
+    if (!name) throw new Error('Usage: agentforge profile save <name> [--provider <p>] [--model <m>] [--mode <posture>] [--scope project|global].');
+    const mode = flagString(flags, 'mode');
+    const saved = await saveProfile({
+      name,
+      provider: flagString(flags, 'provider'),
+      model: flagString(flags, 'model'),
+      permissionMode: mode ? (mode as 'read-only' | 'ask' | 'workspace-write' | 'trusted') : undefined,
+    }, { scope: flagString(flags, 'scope') as 'project' | 'global' | undefined });
+    success(`${saved.replaced ? 'Replaced' : 'Saved'} profile '${name}' in ${saved.path}`);
+    return 0;
+  }
+  if (sub === 'remove' || sub === 'rm') {
+    if (!name) throw new Error('Usage: agentforge profile remove <name>.');
+    if (await removeProfile(name)) { success(`Removed profile '${name}'.`); return 0; }
+    warn(`No profile '${name}' found.`);
+    return 1;
+  }
+  if (sub === 'use') {
+    if (!name) throw new Error('Usage: agentforge profile use <name>.');
+    const profile = await getProfile(name);
+    if (!profile) throw new Error(`Unknown profile '${name}'. List with: agentforge profile list`);
+    const values = resolveProfileToEnvValues(profile);
+    if (values.provider) process.env.AGENTFORGE_PROVIDER = values.provider;
+    if (values.model) process.env.AGENTFORGE_MODEL = values.model;
+    if (values.permissionMode) {
+      const { setPermissionMode } = await import('./permissions.js');
+      setPermissionMode(values.permissionMode);
+    }
+    await setActiveProfile(name, flagString(flags, 'scope') === 'project' ? 'project' : 'global');
+    success(`Profile '${name}' active: ${[values.provider, values.model].filter(Boolean).join('/') || '(session defaults)'}${values.permissionMode ? ` · ${values.permissionMode}` : ''}`);
+    return 0;
+  }
+  if (sub === 'current') {
+    const active = await activeProfileName();
+    if (active) info(`Active profile: ${active}`);
+    else info('No profile active (session defaults).');
+    return 0;
+  }
+  throw new Error('Usage: agentforge profile [list|save|use|current|remove].');
+}
