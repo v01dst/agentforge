@@ -2,7 +2,11 @@
 
 All notable changes to AgentForge are documented here.
 
-## [Unreleased]
+## [0.4.0] — 2026-08-31
+
+Feature wave one (multi-project adoption plan, phases A, N, B, C, D, F, G — re-expressed
+through AgentForge's own contracts; versions 0.1.0–0.3.1 remain occupied on npm by the
+earlier release lineage).
 
 ### Permissions v2: structured rules + doom-loop guard (Phase G — multi-project plan)
 

@@ -45,7 +45,7 @@ test('published-mode scaffold keeps registry instructions', async () => {
   try {
     const target = await scaffold('registry-agent', parent);
     const packageJson = JSON.parse(await readFile(join(target, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> };
-    assert.equal(packageJson.dependencies?.['@agentforge-oss/core'], '^0.0.2');
+    assert.equal(packageJson.dependencies?.['@agentforge-oss/core'], '^0.4.0');
     const readme = await readFile(join(target, 'README.md'), 'utf8');
     assert.match(readme, /npm install/);
     assert.match(readme, /npx agentforge chat/);

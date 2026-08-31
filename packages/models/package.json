@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-oss/models",
-  "version": "0.0.2",
+  "version": "0.4.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -991,10 +991,13 @@ data · "model-visible means logged" · one policy layer everywhere · everythin
 
 | Ver | Phases |
 | --- | --- |
-| 0.1.0 | A memory core ✅ · N plugin kernel + interceptor seam ✅ · B skills upgrade ✅ · C reflection ✅ · D loop upgrades ✅ · F agents/subagents ✅ · G permissions v2 ✅ |
-| 0.2.0 | H session manager (NDJSON log-as-truth) · I LSP bridge · P profiles · Q observability core · R security findings · T session modes |
-| 0.3.0 | J gateway serve (+OpenAI-compatible agent-as-model) · K daemon + heartbeat · S benchmarking |
-| 0.4.0 | L channel adapters (webhook + Telegram) · M device tools |
+| 0.4.0 | A memory core ✅ · N plugin kernel + interceptor seam ✅ · B skills upgrade ✅ · C reflection ✅ · D loop upgrades ✅ · F agents/subagents ✅ · G permissions v2 ✅ |
+| 0.5.0 | H session manager (NDJSON log-as-truth) · I LSP bridge · P profiles · Q observability core · R security findings · T session modes |
+| 0.6.0 | J gateway serve (+OpenAI-compatible agent-as-model) · K daemon + heartbeat · S benchmarking |
+| 0.7.0 | L channel adapters (webhook + Telegram) · M device tools |
+
+(Note: versions 0.1.0–0.3.1 are occupied on npm by an earlier release lineage; the
+six-project feature waves release as 0.4.0 onward.)
 
 Phase A — memory core + workspace persona (landed):
 
