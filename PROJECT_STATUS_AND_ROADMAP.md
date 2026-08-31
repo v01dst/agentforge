@@ -992,7 +992,7 @@ data · "model-visible means logged" · one policy layer everywhere · everythin
 | Ver | Phases |
 | --- | --- |
 | 0.4.0 | A memory core ✅ · N plugin kernel + interceptor seam ✅ · B skills upgrade ✅ · C reflection ✅ · D loop upgrades ✅ · F agents/subagents ✅ · G permissions v2 ✅ |
-| 0.5.0 | H session log-as-truth + fork ✅ · I LSP bridge ✅ · P profiles ✅ · Q observability core ✅ · R security findings ✅ · T session modes |
+| 0.5.0 | H session log-as-truth + fork ✅ · I LSP bridge ✅ · P profiles ✅ · Q observability core ✅ · R security findings ✅ · T session modes ✅ |
 | 0.6.0 | J gateway serve (+OpenAI-compatible agent-as-model) · K daemon + heartbeat · S benchmarking |
 | 0.7.0 | L channel adapters (webhook + Telegram) · M device tools |
 
@@ -1089,6 +1089,13 @@ Phase R — security findings, observe-only (landed):
 - [x] Deterministic detectors over tool inputs/results: secret shapes (masked in detail), risky shell patterns, credential-file access (`.env.example` exempt), boundary-probe failures.
 - [x] Observe-only interceptors (preTool never denies); findings NDJSON log + `agentforge findings list|clear`.
 - [x] Tests: 9 suites; CLI suite 228 green.
+
+Phase T — session modes (landed):
+
+- [x] `chat | build | indie | automode` mode layer above postures; mode entry applies its default posture + injects an instruction fragment; automode's cheap-model router declared, off by default.
+- [x] `/mode` = session modes; `/permissions` (+ `/posture`) = postures; plain-chat commands aligned; `/plan`/`/build` quick switches kept.
+- [x] Live-posture fix: `applyWorkspacePolicy` resolves posture per call (`getMode`), so switches apply immediately to wrapped tools (regression-tested).
+- [x] Tests: 4 suites; CLI suite 232 green.
 
 ## 16. Definition of “Ready to Use”
 

@@ -16,6 +16,8 @@ import { createCompressionInterceptor } from './context/compression.js';
 import { createDoomLoopGuard } from './guards/doom-loop.js';
 import { ObservabilitySink } from './observability/sink.js';
 import { createFindingsRuntime } from './findings/scanner.js';
+import { sessionModeInstructions } from './coding-tools.js';
+import type { SessionMode } from './modes/session-modes.js';
 
 export interface CodingSessionOptions {
   /** Workspace root for repository tools (defaults to cwd). */
@@ -37,6 +39,8 @@ export interface CodingSessionOptions {
   compression?: { maxChars?: number; keepRecent?: number; foldTextCap?: number };
   /** Phase Q: write structured run events to .agentforge/observability/ (default: on). */
   observability?: boolean;
+  /** Phase T: active session mode (chat | build | indie | automode); default build. */
+  sessionMode?: SessionMode;
 }
 
 interface QueuedEvent {
@@ -102,6 +106,9 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
   ];
   const persona = renderPersonaBlock(loadPersonaSourcesSync(root));
   if (persona) instructionBlocks.push(persona);
+  // Phase T: active session mode contributes its instruction fragment.
+  const modeInstructions = sessionModeInstructions(options.sessionMode);
+  if (modeInstructions) instructionBlocks.push(modeInstructions);
   // Progressive disclosure (Phase B): the index is always present; bodies
   // load on demand through skill_view, or directly when /skills selects them.
   const skillIndex = renderSkillIndex(listSkillsSync(root));

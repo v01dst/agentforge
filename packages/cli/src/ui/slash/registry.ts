@@ -230,24 +230,51 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
     },
     {
       name: 'mode',
-      description: 'Show or set the permission mode for coding tools',
-      usage: '/mode [read-only|ask|workspace-write|trusted]',
+      description: 'Show or set the session mode (chat | build | indie | automode)',
+      usage: '/mode [chat|build|indie|automode]',
       argsHint: ['mode'],
+      category: 'config',
+      run: async (args, cmdCtx) => {
+        const { SESSION_MODES, SESSION_MODE_DEFINITIONS, currentSessionMode, enterSessionMode, isSessionMode } = await import('../../modes/session-modes.js');
+        const target = args[0];
+        if (!target) {
+          const current = currentSessionMode();
+          cmdCtx.pushSystem([
+            `session mode: ${current}`,
+            ...SESSION_MODES.map((mode) => `  ${mode}${mode === current ? ' ←' : ''} — ${SESSION_MODE_DEFINITIONS[mode].description}`),
+          ].join('\n'));
+          return;
+        }
+        if (!isSessionMode(target)) {
+          cmdCtx.pushSystem(`✗ unknown session mode '${target}' — modes: ${SESSION_MODES.join(' | ')}`);
+          return;
+        }
+        const result = enterSessionMode(target);
+        cmdCtx.refreshStatus();
+        cmdCtx.pushSystem(`session mode: ${result.mode} (posture: ${result.postureApplied})`);
+      },
+    },
+    {
+      name: 'permissions',
+      aliases: ['posture'],
+      description: 'Show or set the permission posture for coding tools',
+      usage: '/permissions [read-only|ask|workspace-write|trusted]',
+      argsHint: ['posture'],
       category: 'config',
       run: async (args, cmdCtx) => {
         const { PERMISSION_MODES, currentPermissionMode, setPermissionMode } = await import('../../permissions.js');
         const target = args[0];
         if (!target) {
-          cmdCtx.pushSystem(`permission mode: ${currentPermissionMode()} — modes: ${PERMISSION_MODES.join(' | ')}`);
+          cmdCtx.pushSystem(`permission posture: ${currentPermissionMode()} — postures: ${PERMISSION_MODES.join(' | ')}`);
           return;
         }
         if (!(PERMISSION_MODES as readonly string[]).includes(target)) {
-          cmdCtx.pushSystem(`✗ unknown mode '${target}' — modes: ${PERMISSION_MODES.join(', ')}`);
+          cmdCtx.pushSystem(`✗ unknown posture '${target}' — postures: ${PERMISSION_MODES.join(', ')}`);
           return;
         }
         setPermissionMode(target as never);
         cmdCtx.refreshStatus();
-        cmdCtx.pushSystem(`permission mode: ${target}`);
+        cmdCtx.pushSystem(`permission posture: ${target}`);
       },
     },
     {

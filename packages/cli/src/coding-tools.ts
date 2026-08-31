@@ -17,6 +17,7 @@ import {
   type ApprovalRequest,
   type ApprovalDecision,
 } from './permissions.js';
+import { SESSION_MODE_DEFINITIONS, type SessionMode } from './modes/session-modes.js';
 import type { PermissionRule } from './permissions-store.js';
 import { createMemoryTool } from './memory/tool.js';
 import { createSkillManageTool, createSkillViewTool } from './skills/tools.js';
@@ -53,6 +54,16 @@ export interface CodingToolsOptions {
   subagentModelName?: string;
   /** When true, the `task` delegation tool is not registered (subagents disabled). */
   disableSubagents?: boolean;
+  /** Phase T: active session mode; its instruction fragment is returned via sessionModeInstructions. */
+  sessionMode?: SessionMode;
+}
+
+/**
+ * The instruction fragment for the active session mode (Phase T). Pure
+ * helper so callers can inject it into session instructions.
+ */
+export function sessionModeInstructions(mode: SessionMode | undefined): string | undefined {
+  return mode ? SESSION_MODE_DEFINITIONS[mode].instructions : undefined;
 }
 
 /**
@@ -64,7 +75,7 @@ export interface CodingToolsOptions {
 export function createCodingTools(options: CodingToolsOptions = {}): PolicyTool[] {
   const root = options.root ?? process.cwd();
   const allowedCommands = options.allowedCommands ?? [];
-  const policy = { root, mode: currentPermissionMode(), requestApproval: options.requestApproval, rules: options.permissionRules };
+  const policy = { root, mode: currentPermissionMode(), getMode: currentPermissionMode, requestApproval: options.requestApproval, rules: options.permissionRules };
 
   const tools: PolicyTool[] = [
     createListFilesTool({ root }) as unknown as PolicyTool,

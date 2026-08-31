@@ -244,18 +244,33 @@ async function handleChatSlash(line: string, session: ChatSession): Promise<'han
       return 'handled';
     }
     case 'mode': {
+      const { SESSION_MODES, currentSessionMode, enterSessionMode, isSessionMode, SESSION_MODE_DEFINITIONS } = await import('./modes/session-modes.js');
+      const requested = command.args[0];
+      if (!requested) {
+        info(`Session mode: ${currentSessionMode()} (options: ${SESSION_MODES.join(', ')})`);
+        return 'handled';
+      }
+      if (!isSessionMode(requested)) {
+        warn(`Unknown session mode '${requested}'. Options: ${SESSION_MODES.join(', ')}.`);
+        return 'handled';
+      }
+      const result = enterSessionMode(requested);
+      info(`Session mode set to '${result.mode}' (posture: ${result.postureApplied}) — ${SESSION_MODE_DEFINITIONS[result.mode].description}`);
+      return 'handled';
+    }
+    case 'permissions': {
       const { PERMISSION_MODES, currentPermissionMode, setPermissionMode } = await import('./permissions-state.js');
       const requested = command.args[0];
       if (!requested) {
-        info(`Permission mode: ${currentPermissionMode()} (options: ${PERMISSION_MODES.join(', ')})`);
+        info(`Permission posture: ${currentPermissionMode()} (options: ${PERMISSION_MODES.join(', ')})`);
         return 'handled';
       }
       if (!PERMISSION_MODES.includes(requested as never)) {
-        warn(`Unknown mode '${requested}'. Options: ${PERMISSION_MODES.join(', ')}.`);
+        warn(`Unknown posture '${requested}'. Options: ${PERMISSION_MODES.join(', ')}.`);
         return 'handled';
       }
       setPermissionMode(requested as typeof PERMISSION_MODES[number]);
-      info(`Permission mode set to '${requested}' for this session.`);
+      info(`Permission posture set to '${requested}' for this session.`);
       return 'handled';
     }
     default:

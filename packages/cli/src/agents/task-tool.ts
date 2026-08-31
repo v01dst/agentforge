@@ -49,7 +49,7 @@ function childToolset(agent: AgentInfo, options: TaskToolOptions): ToolLike[] {
     permissionRules: options.permissionRules,
   });
   const selected = coding.filter((tool: PolicyTool) => allowed.has(tool.name));
-  const policy = { root: options.root, mode, requestApproval: options.requestApproval, rules: options.permissionRules };
+  const policy = { root: options.root, mode, getMode: () => mode, requestApproval: options.requestApproval, rules: options.permissionRules };
   return selected.map((tool) => applyWorkspacePolicy(tool, policy)) as unknown as ToolLike[];
 }
 

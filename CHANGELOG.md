@@ -4,6 +4,13 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### Session modes (Phase T — multi-project plan)
+
+- New mode layer above permission postures (`packages/cli/src/modes/session-modes.ts`): `chat` (explain-first, ask posture), `build` (default coding mode), `indie` (fast-shipping: workspace-write default, small diffs, run tests, no gold-plating), `automode` (heuristic autonomy; the optional cheap-model router is declared but **off by default**). Modes are advisory state: entering a mode applies its default posture and contributes an instruction fragment to session instructions — they never bypass the policy layer.
+- Slash surface: `/mode [chat|build|indie|automode]` is the **session-mode** switch; `/permissions [read-only|ask|workspace-write|trusted]` (alias `/posture`) is the **posture** switch. Plain-chat `mode`/`permissions` commands match. `/plan` and `/build` remain quick posture switches.
+- **Live-posture fix (regression):** `applyWorkspacePolicy` now resolves the posture per tool call (`getMode`) instead of capturing it at runner build — `/plan`, `/build`, `/permissions`, and mode switches take effect immediately on already-built tools, in the TUI and mid-run. Regression-tested (ask → read-only → workspace-write on one wrapped tool).
+- Tests: 4 new suites; CLI suite 232 green.
+
 ### Security findings, observe-only (Phase R — multi-project plan)
 
 - Deterministic findings scanner over tool activity (`packages/cli/src/findings/scanner.ts`), wired as `preTool`/`postTool` interceptors in every coding session. Doctrine-compliant: **findings are recorded, never enforced** — `preTool` always returns void, even for secrets.

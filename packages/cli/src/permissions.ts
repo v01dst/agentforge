@@ -68,6 +68,12 @@ export interface ApprovalDecision {
 export interface WorkspacePolicyOptions {
   root: string;
   mode: PermissionMode;
+  /**
+   * Live posture provider (Phase T): when given, it is consulted on every
+   * tool call so mode switches take effect immediately. When absent, the
+   * static `mode` above is used.
+   */
+  getMode?: () => PermissionMode;
   /** Prompt shown to the user when a tool needs approval (ask flows). */
   requestApproval?: (request: ApprovalRequest) => Promise<ApprovalDecision>;
   /**
@@ -93,9 +99,9 @@ function commandContextOf(tool: string, input: unknown): CommandContext | undefi
  */
 export function applyWorkspacePolicy(tool: PolicyTool, options: WorkspacePolicyOptions): PolicyTool {
   const root = resolve(options.root);
-  const autoAllowed = MODE_ALLOWED_PERMISSIONS[options.mode];
-  const missing = (tool.permissions ?? []).filter((permission) => !autoAllowed.has(permission));
-  const needsApproval = missing.length > 0 && options.mode !== 'read-only';
+  // The posture is resolved per call (Phase T): mode switches (/plan, /build,
+  // /permissions, session modes) take effect immediately for live tools.
+  const currentMode = (): PermissionMode => (options.getMode ? options.getMode() : options.mode);
   let remembered: ApprovalDecision | undefined;
 
   return {
@@ -128,19 +134,21 @@ export function applyWorkspacePolicy(tool: PolicyTool, options: WorkspacePolicyO
         }
       }
 
+      const mode = currentMode();
+      const autoAllowed = MODE_ALLOWED_PERMISSIONS[mode];
+      const missing = (tool.permissions ?? []).filter((permission) => !autoAllowed.has(permission));
+
       if (ruleVerdict === 'allow') {
         // Explicit allow: no approval prompt, but path checks above still apply.
         return tool.execute(input, context);
       }
 
-      if (!missing.length || options.mode === 'read-only') {
-        if (options.mode === 'read-only' && missing.length) {
+      if (!missing.length || mode === 'read-only') {
+        if (mode === 'read-only' && missing.length) {
           throw new Error(`Tool ${tool.name} is not permitted in read-only mode (requires: ${missing.join(', ')}).`);
         }
         return tool.execute(input, context);
       }
-
-      if (!needsApproval) return tool.execute(input, context);
 
       if (!remembered) {
         if (!options.requestApproval) {
