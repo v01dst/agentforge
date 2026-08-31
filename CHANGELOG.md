@@ -4,6 +4,14 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### LSP bridge (Phase I — multi-project plan)
+
+- Real JSON-RPC 2.0 LSP client over stdio with Content-Length framing (`packages/cli/src/lsp/lsp.ts`): lazy per-language server lifecycle, request timeouts that fail honestly instead of hanging, notification collection, crash propagation.
+- TS-first defaults: `typescript-language-server --stdio` is assumed for JS/TS when no configuration exists; custom servers are declared in `.agentforge/lsp.json` (`{ servers: [{ id, command, args, extensions }] }`, validated at load).
+- New tools (observe-only, registered in every coding session): `lsp_diagnostics { path }` — didOpen + bounded settle, merges push (`textDocument/publishDiagnostics`) and pull (`textDocument/diagnostic`) results, deduped and formatted as `file:line:col severity: message`; `lsp_hover { path, line, character }` — zero-based hover for types/signatures. Path escapes are refused; unknown extensions report honestly.
+- `LspManager` shares one client per server id across tool calls and disposes servers (shutdown/exit) on process exit; child processes are unref'd so idle servers never block host exit.
+- Tests: 6 new suites driven by a real mock language server speaking framed JSON-RPC over stdio (deterministic, no network); CLI suite 207 green.
+
 ### Session log-as-truth + forking (Phase H — multi-project plan)
 
 - Durable NDJSON session logs (`.agentforge/sessions/<id>.ndjson`): every conversation turn appends one JSON line (`ts`, `type`, `text`, optional `meta`) forever. The JSON snapshot stays the fast, compacted view for loads and listing; the log is the truth — compaction never rewrites it and forks replay from it. Corrupt trailing lines are skipped on read, never discarded on write.

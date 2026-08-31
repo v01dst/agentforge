@@ -992,7 +992,7 @@ data · "model-visible means logged" · one policy layer everywhere · everythin
 | Ver | Phases |
 | --- | --- |
 | 0.4.0 | A memory core ✅ · N plugin kernel + interceptor seam ✅ · B skills upgrade ✅ · C reflection ✅ · D loop upgrades ✅ · F agents/subagents ✅ · G permissions v2 ✅ |
-| 0.5.0 | H session log-as-truth + fork ✅ · I LSP bridge · P profiles · Q observability core · R security findings · T session modes |
+| 0.5.0 | H session log-as-truth + fork ✅ · I LSP bridge ✅ · P profiles · Q observability core · R security findings · T session modes |
 | 0.6.0 | J gateway serve (+OpenAI-compatible agent-as-model) · K daemon + heartbeat · S benchmarking |
 | 0.7.0 | L channel adapters (webhook + Telegram) · M device tools |
 
@@ -1063,6 +1063,13 @@ Phase H — session log-as-truth + forking (landed):
 - [x] `forkSession`: full-log replay into a fresh session, `forkedFrom` lineage, `upTo` prefix cuts, snapshot+summary fallback for legacy sessions.
 - [x] Surfaces: `sessions fork|transcript` CLI, `/fork` + `/transcript` TUI slash commands; autosave appends without double-logging resumed history.
 - [x] Tests: 8 new; TUI autosave assertion updated; CLI suite 201 green.
+
+Phase I — LSP bridge (landed):
+
+- [x] JSON-RPC 2.0 stdio client with LSP framing: lazy servers, timeouts, crash propagation, notification handling.
+- [x] TS-first defaults (`typescript-language-server --stdio` for JS/TS); custom servers via validated `.agentforge/lsp.json`.
+- [x] Observe-only tools: `lsp_diagnostics` (push+pull merge, formatted `file:line:col`), `lsp_hover`; workspace-escape refusal; per-server-id client sharing + disposal.
+- [x] Tests: 6 suites against a real mock server over stdio; CLI suite 207 green.
 
 ## 16. Definition of “Ready to Use”
 
