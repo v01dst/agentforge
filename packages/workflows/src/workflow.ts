@@ -1,4 +1,5 @@
 import { EventBus, AgentForgeError, CancellationError, createRunId } from '@agentforge-oss/core';
+import type { EventBus as EventBusType } from '@agentforge-oss/core';
 import type { WorkflowDefinition, WorkflowEdge, WorkflowNode, WorkflowResult, WorkflowRunOptions, WorkflowState, WorkflowStep } from './types.js';
 
 export class Workflow {
@@ -23,7 +24,7 @@ export class WorkflowBuilder {
   add(node: WorkflowNode): this { if (this.nodes.has(node.id)) throw new Error(`Duplicate workflow node: ${node.id}`); this.nodes.set(node.id, node); return this; }
   connect(from: string, to: string, options: Omit<WorkflowEdge, 'from' | 'to'> = {}): this { this.edges.push({ from, to, ...options }); return this; }
   setStart(id: string): this { this.start = id; return this; }
-  build(): Workflow { return new Workflow({ name: this.name, nodes: [...this.nodes.values()], edges: this.edges, start: this.start }); }
+  build(events?: EventBusType): Workflow { return new Workflow({ name: this.name, nodes: [...this.nodes.values()], edges: this.edges, start: this.start, events }); }
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number | undefined, signal: AbortSignal): Promise<T> { if (!timeoutMs) return promise; return new Promise((resolve, reject) => { let timer = setTimeout(() => reject(new AgentForgeError(`Workflow node timed out after ${timeoutMs}ms`, 'TIMEOUT')), timeoutMs); const abort = () => { clearTimeout(timer); reject(new CancellationError()); }; if (signal.aborted) abort(); signal.addEventListener('abort', abort, { once: true }); promise.then((value) => { clearTimeout(timer); signal.removeEventListener('abort', abort); resolve(value); }, (error) => { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(error); }); }); }
