@@ -6,14 +6,14 @@
 
 **A model-agnostic agent runtime, terminal coding agent, and extension platform — in one TypeScript monorepo.**
 
-[![version](https://img.shields.io/badge/version-0.0.1-818cf8)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.0.2-818cf8)](CHANGELOG.md)
 [![node](https://img.shields.io/badge/node-%E2%89%A520.11-339933?logo=node.js&logoColor=white)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-9-F69220?logo=pnpm&logoColor=white)](pnpm-workspace.yaml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![tests](https://img.shields.io/badge/tests-passing-brightgreen)](.github/workflows)
 [![discord](https://img.shields.io/badge/discord-9p.1-5865F2?logo=discord&logoColor=white)](#-community)
 
-*Chat-first TUI · streaming turns · plugins · MCP servers · skills · permission-gated coding tools*
+*Chat-first TUI · provider streaming · permission-gated coding tools · durable sessions · workflow documents · plugins · MCP · skills*
 
 </div>
 
@@ -45,13 +45,16 @@ Most agent CLIs lock you into one provider and one way of working. AgentForge is
 
 ## Install
 
-> Packages ship to npm under the `@agentforge-oss` scope starting with `v0.0.1`.
+Packages ship to npm under the `@agentforge-oss` scope — the CLI installs globally and still provides the `agentforge` binary:
 
 ```bash
-# once published
 npm install -g @agentforge-oss/cli
+agentforge --version          # v0.0.2
 
-# today, from source
+# or run it without installing
+npx @agentforge-oss/cli chat
+
+# or from source
 git clone https://github.com/v01dst/agentforge.git
 cd agentforge && pnpm install && pnpm build
 node packages/cli/dist/bin.js --help
@@ -81,9 +84,9 @@ agentforge providers add openrouter \
 | Surface | Package | What it gives you |
 | --- | --- | --- |
 | Agent runtime | [`@agentforge-oss/core`](packages/core) | Typed agent loop, tool calling, retries, abort/cancellation, structured output, event bus |
-| Model adapters | [`@agentforge-oss/models`](packages/models) | OpenAI · Anthropic · Gemini · OpenAI-compatible (OpenRouter, Ollama, vLLM…) · deterministic mock |
+| Model adapters | [`@agentforge-oss/models`](packages/models) | OpenAI · Anthropic · Gemini · OpenAI-compatible (OpenRouter, Ollama, vLLM…) · SSE streaming · deterministic mock |
 | Tools | [`@agentforge-oss/tools`](packages/tools) | Zod-typed tool framework + filesystem, HTTP, shell, repository, patch-editing tools |
-| Workflows | [`@agentforge-oss/workflows`](packages/workflows) | Graph execution with branching, parallel steps, retries |
+| Workflows | [`@agentforge-oss/workflows`](packages/workflows) | Versioned workflow documents, graph validation, branching, parallel steps, retries, deterministic replay |
 | Memory & storage | [`memory`](packages/memory) · [`storage`](packages/storage) | Pluggable memory providers, run persistence |
 | Observability | [`@agentforge-oss/observability`](packages/observability) | Structured events, redaction-aware sinks |
 | MCP client | [`@agentforge-oss/mcp`](packages/mcp) | stdio MCP servers → native agent tools |
@@ -98,8 +101,12 @@ agentforge chat       # explicit interactive session (--plain for pipes/CI)
 agentforge run        # one headless turn — perfect for scripting
 agentforge doctor     # environment, config, plugins, MCP — with security surfacing
 agentforge models list
+agentforge models test openrouter   # one-shot provider connectivity probe
 agentforge providers add <name> --protocol openai-compatible --base-url …
-agentforge inspect <run-id>
+agentforge sessions list|resume|rename|export|prune
+agentforge permissions allow|deny <tool>
+agentforge workflows validate <file.json>
+agentforge inspect <run-id>         # runs — or stored sessions with --session
 ```
 
 Inside a session:
@@ -110,9 +117,10 @@ Inside a session:
 | `/models` `/model <name>` `/providers` `/connect <p>` | switch models mid-flight |
 | `/tools` `/workflows` `/runs` `/inspect <id>` | inspect what the agent can do and did |
 | `/mode [read-only\|ask\|workspace-write\|trusted]` | permission posture for edits & commands |
-| `/plugins` `/skills` | browse registered extensions |
+| `/rename <title>` `/show [id]` `/sessions` `/resume [id]` `/new` | durable session control |
+| `/plugins` `/skills` `/skin [name]` | browse extensions and themes |
 
-Streaming turns show live token output; Ctrl-C cancels the current turn, twice exits. Tool calls render inline as they complete. Non-TTY usage degrades to clean plain-text (pipes, CI, `echo "hi" | agentforge chat`).
+Streaming turns show live token output and SSE streaming from every HTTP provider (OpenAI, Anthropic, Gemini, OpenAI-compatible). Long sessions compact automatically to a recent tail plus a rolling summary. Ctrl-C cancels the current turn, twice exits. Tool calls render inline as they complete. Non-TTY usage degrades to clean plain-text (pipes, CI, `echo "hi" | agentforge chat`).
 
 ## Extensions: plugins · MCP · skills
 
@@ -194,7 +202,45 @@ scoped to the workspace root and gated by four permission modes:
 | `trusted` | ✅ | ✅ | ✅ |
 
 Credentials never touch disk through the CLI, API keys are redacted from logs and errors,
-and provider credentials resolve from environment variables only.
+and provider credentials resolve from environment variables only. Hardening beyond the modes:
+
+- **Per-tool rules** — `agentforge permissions deny <tool>` blocks a tool in every mode; `allow` skips its approval prompt. Rules live in `.agentforge/permissions.json` and never bypass workspace path checks.
+- **Secret-file protection** — `read_file`/`search_text` refuse `.env`, key files, `id_rsa`, `.ssh/` and friends unless explicitly opted in.
+- **Command containment** — `run_command` is allowlist-only, shell-free, rejects path arguments escaping the workspace, and blocks destructive patterns (`rm -rf ~`, `dd of=/dev/*`, `curl | sh`, …).
+- **SSRF-safe HTTP** — redirects are followed manually with every hop re-validated against private-network blocks and host allowlists (including encoded-IP tricks).
+
+## Workflows as documents
+
+Workflows are plain, versioned JSON — no code inside the document. Behavior is attached at
+compile time through named handlers and live agent/model/tool instances:
+
+```json
+{
+  "version": 1,
+  "name": "triage",
+  "start": "start",
+  "nodes": [
+    { "id": "start", "type": "input" },
+    { "id": "gate", "type": "condition", "handler": "needsReview" },
+    { "id": "review", "type": "transform", "handler": "flagForHuman", "retries": 1 },
+    { "id": "out", "type": "output" }
+  ],
+  "edges": [
+    { "from": "start", "to": "gate" },
+    { "from": "gate", "to": "review", "label": "true" },
+    { "from": "gate", "to": "out", "label": "false" },
+    { "from": "review", "to": "out" }
+  ]
+}
+```
+
+```bash
+agentforge workflows validate triage.json   # precise structural errors before anything runs
+```
+
+`compileWorkflowDocument` turns a validated document into the executable graph; the engine
+runs branching, parallel fan-out, and per-node retries with deterministic, JSON-serializable
+step histories you can replay and audit.
 
 ## Architecture
 
@@ -262,10 +308,15 @@ for PR expectations. The roadmap is maintained as a truthful status document —
 
 ## Status
 
-AgentForge **v0.01** is an experimental foundation that already does real work:
-multi-turn streaming chat, repository-aware tools behind permissions, provider switching,
-plugins/MCP/skills, run inspection, and a playground — verified by ~200 deterministic tests.
-Not yet production-stable; APIs may change before `0.1`.
+AgentForge **v0.0.2** is an experimental foundation that already does real work:
+multi-turn streaming chat with durable sessions (rename/export/prune/compaction), repository-aware
+tools behind per-tool permission rules, SSE provider streaming with conformance fixtures,
+`models test` probes, plugins/MCP/skills, versioned workflow documents, run inspection, and a
+playground — verified by ~257 deterministic tests. Not yet production-stable; APIs may change
+before `0.1`.
+
+See [CHANGELOG.md](CHANGELOG.md) for the release history and
+[PROJECT_STATUS_AND_ROADMAP.md](PROJECT_STATUS_AND_ROADMAP.md) for the honest gap list.
 
 ## Community
 

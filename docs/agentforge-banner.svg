@@ -1,36 +1,66 @@
 <svg width="1200" height="300" viewBox="0 0 1200 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AgentForge">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="300" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0b1020"/>
-      <stop offset="0.55" stop-color="#101a33"/>
-      <stop offset="1" stop-color="#0b1020"/>
+      <stop offset="0" stop-color="#0d0906"/>
+      <stop offset="0.55" stop-color="#1a1108"/>
+      <stop offset="1" stop-color="#0d0906"/>
     </linearGradient>
-    <linearGradient id="accent" x1="240" y1="60" x2="960" y2="240" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#22d3ee"/>
-      <stop offset="0.5" stop-color="#818cf8"/>
-      <stop offset="1" stop-color="#f472b6"/>
+    <linearGradient id="gold" x1="240" y1="60" x2="960" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="0.5" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#f97316"/>
     </linearGradient>
-    <linearGradient id="line" x1="80" y1="150" x2="1120" y2="150" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#22d3ee" stop-opacity="0"/>
-      <stop offset="0.5" stop-color="#818cf8" stop-opacity="0.55"/>
-      <stop offset="1" stop-color="#f472b6" stop-opacity="0"/>
+    <linearGradient id="wordmark" x1="180" y1="150" x2="1020" y2="150" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b45309"/>
+      <stop offset="0.35" stop-color="#fbbf24"/>
+      <stop offset="0.65" stop-color="#fde68a"/>
+      <stop offset="1" stop-color="#f59e0b"/>
     </linearGradient>
+    <linearGradient id="glowline" x1="80" y1="150" x2="1120" y2="150" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f59e0b" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#fbbf24" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#f97316" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="heathaze" cx="600" cy="120" r="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f59e0b" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#f59e0b" stop-opacity="0"/>
+    </radialGradient>
   </defs>
+
   <rect width="1200" height="300" rx="18" fill="url(#bg)"/>
-  <rect x="1.5" y="1.5" width="1197" height="297" rx="16.5" stroke="#818cf8" stroke-opacity="0.25"/>
-  <line x1="80" y1="150" x2="1120" y2="150" stroke="url(#line)" stroke-width="2"/>
-  <g transform="translate(600 118)">
-    <!-- anvil -->
-    <path d="M-46 44 L46 44 L38 32 L-38 32 Z" fill="url(#accent)" opacity="0.95"/>
-    <path d="M-30 32 C-52 26 -58 12 -34 10 L34 10 C58 12 52 26 30 32 Z" fill="url(#accent)"/>
-    <path d="M34 14 C50 14 56 8 54 2 C48 8 42 8 34 8 Z" fill="url(#accent)" opacity="0.85"/>
-    <rect x="-10" y="44" width="20" height="10" rx="2" fill="url(#accent)" opacity="0.8"/>
-    <!-- hammer spark -->
-    <circle cx="70" cy="-6" r="3.4" fill="#fbbf24"/>
-    <circle cx="82" cy="-18" r="2.4" fill="#f472b6"/>
-    <circle cx="64" cy="-24" r="2" fill="#22d3ee"/>
+  <rect x="1.5" y="1.5" width="1197" height="297" rx="16.5" stroke="#f59e0b" stroke-opacity="0.28"/>
+  <rect width="1200" height="300" rx="18" fill="url(#heathaze)"/>
+
+  <!-- faint ember particles across the forge -->
+  <g fill="#fbbf24">
+    <circle cx="132" cy="226" r="2" opacity="0.5"/>
+    <circle cx="204" cy="86" r="1.6" opacity="0.4"/>
+    <circle cx="288" cy="252" r="1.4" opacity="0.35"/>
+    <circle cx="368" cy="64" r="2.2" opacity="0.45"/>
+    <circle cx="452" cy="238" r="1.6" opacity="0.4"/>
+    <circle cx="742" cy="70" r="1.8" opacity="0.45"/>
+    <circle cx="842" cy="246" r="1.4" opacity="0.35"/>
+    <circle cx="936" cy="92" r="2" opacity="0.5"/>
+    <circle cx="1032" cy="238" r="1.6" opacity="0.4"/>
+    <circle cx="1096" cy="76" r="1.8" opacity="0.4"/>
   </g>
-  <text x="600" y="196" text-anchor="middle" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="64" font-weight="700" letter-spacing="10" fill="#e5e7eb">AGENTFORGE</text>
-  <text x="600" y="238" text-anchor="middle" font-family="'JetBrains Mono',Menlo,Consolas,monospace" font-size="19" letter-spacing="3" fill="#94a3b8">forge agents · plugins · mcp · workflows</text>
-  <text x="984" y="278" text-anchor="end" font-family="'JetBrains Mono',Menlo,Consolas,monospace" font-size="15" letter-spacing="2" fill="#64748b">v0.01</text>
+
+  <line x1="80" y1="150" x2="1120" y2="150" stroke="url(#glowline)" stroke-width="2"/>
+
+  <!-- anvil with hammer sparks, gold-ramped -->
+  <g transform="translate(600 116)">
+    <path d="M-46 44 L46 44 L38 32 L-38 32 Z" fill="url(#gold)" opacity="0.95"/>
+    <path d="M-30 32 C-52 26 -58 12 -34 10 L34 10 C58 12 52 26 30 32 Z" fill="url(#gold)"/>
+    <path d="M34 14 C50 14 56 8 54 2 C48 8 42 8 34 8 Z" fill="url(#gold)" opacity="0.85"/>
+    <rect x="-10" y="44" width="20" height="10" rx="2" fill="url(#gold)" opacity="0.8"/>
+    <!-- hammer spark burst -->
+    <circle cx="70" cy="-6" r="3.4" fill="#fde68a"/>
+    <circle cx="84" cy="-20" r="2.4" fill="#f97316"/>
+    <circle cx="62" cy="-26" r="2" fill="#fbbf24"/>
+    <circle cx="92" cy="0" r="1.6" fill="#fde68a" opacity="0.8"/>
+  </g>
+
+  <text x="600" y="196" text-anchor="middle" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="64" font-weight="700" letter-spacing="10" fill="url(#wordmark)">AGENTFORGE</text>
+  <text x="600" y="238" text-anchor="middle" font-family="'JetBrains Mono',Menlo,Consolas,monospace" font-size="19" letter-spacing="3" fill="#d6b98c">forge agents · code safely · stream models · run workflows</text>
+  <text x="984" y="278" text-anchor="end" font-family="'JetBrains Mono',Menlo,Consolas,monospace" font-size="15" letter-spacing="2" fill="#92734a">v0.0.2</text>
 </svg>
