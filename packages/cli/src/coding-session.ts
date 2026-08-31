@@ -8,6 +8,7 @@ import { requestToolApproval } from './approvals.js';
 import { detectDefaultProvider } from './model-runner.js';
 import { readPermissionRulesSync } from './permissions-store.js';
 import { loadMemorySync, loadPersonaSourcesSync, renderPersonaBlock } from './memory/store.js';
+import { listSkillsSync, renderSkillIndex } from './skills/skills.js';
 import type { AgentForgePlugin } from './plugins/plugins.js';
 
 export interface CodingSessionOptions {
@@ -75,6 +76,10 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
   ];
   const persona = renderPersonaBlock(loadPersonaSourcesSync(root));
   if (persona) instructionBlocks.push(persona);
+  // Progressive disclosure (Phase B): the index is always present; bodies
+  // load on demand through skill_view, or directly when /skills selects them.
+  const skillIndex = renderSkillIndex(listSkillsSync(root));
+  if (skillIndex) instructionBlocks.push(skillIndex);
   const memorySnapshot = loadMemorySync('memory', root);
   if (memorySnapshot.entries.length) {
     instructionBlocks.push(`Persistent memory for future sessions — consolidate before adding when above 80% capacity.`);

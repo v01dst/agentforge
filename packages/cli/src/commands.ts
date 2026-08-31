@@ -868,6 +868,65 @@ export async function permissionsCommand(args: string[], flags: Record<string, s
   throw new Error(`Unknown permissions subcommand: ${sub}. Usage: agentforge permissions [list|allow|deny|remove].`);
 }
 
+/** Skill review flow: pending staged writes, diff preview, approve/reject. */
+export async function skillsCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
+  const [sub, id] = args;
+  const { listStagedWrites, approveStagedWrite, rejectStagedWrite } = await import('./skills/skills.js');
+  const { listSkills } = await import('./skills/skills.js');
+  if (!sub || sub === 'list' || sub === 'ls') {
+    const skills = await listSkills();
+    const staged = await listStagedWrites();
+    if (flagBoolean(flags, 'json')) { printJson({ skills: skills.map((skill) => ({ name: skill.name, description: skill.description, folder: skill.dir !== undefined })), staged }); return 0; }
+    heading('AgentForge skills (.agentforge/skills)');
+    if (!skills.length) hint('No skills yet. Drop SKILL.md folders into .agentforge/skills/.');
+    for (const skill of skills) info(`  ${skill.name}${skill.description ? ` — ${skill.description}` : ''}${skill.dir ? ' [folder]' : ''}`);
+    if (staged.length) {
+      heading('Pending skill writes');
+      for (const entry of staged) info(`  ${entry.id}  ${entry.action} ${entry.skill}`);
+      hint(`Review with: agentforge skills diff <id> · approve <id> · reject <id>`);
+    }
+    return 0;
+  }
+  if (sub === 'pending') {
+    const staged = await listStagedWrites();
+    if (flagBoolean(flags, 'json')) { printJson({ staged }); return 0; }
+    heading('Pending skill writes');
+    if (!staged.length) { success('Nothing pending.'); return 0; }
+    for (const entry of staged) info(`  ${entry.id}  ${entry.action} ${entry.skill}${entry.content ? `  (${entry.content.length} chars)` : ''}`);
+    return 0;
+  }
+  if (sub === 'diff') {
+    if (!id) throw new Error('Usage: agentforge skills diff <id>.');
+    const staged = (await listStagedWrites()).find((entry) => entry.id === id);
+    if (!staged) throw new Error(`Unknown staged write: ${id}`);
+    printJson(staged);
+    return 0;
+  }
+  if (sub === 'approve') {
+    if (!id) throw new Error('Usage: agentforge skills approve <id> (or "all").');
+    if (id === 'all') {
+      const staged = await listStagedWrites();
+      for (const entry of staged) success(await approveStagedWrite(entry.id));
+      return 0;
+    }
+    success(await approveStagedWrite(id));
+    return 0;
+  }
+  if (sub === 'reject') {
+    if (!id) throw new Error('Usage: agentforge skills reject <id> (or "all").');
+    if (id === 'all') {
+      const staged = await listStagedWrites();
+      for (const entry of staged) await rejectStagedWrite(entry.id);
+      success(`Rejected ${staged.length} staged write(s).`);
+      return 0;
+    }
+    const removed = await rejectStagedWrite(id);
+    (removed ? success : warn)(removed ? `Staged write ${id} rejected.` : `Staged write ${id} was already gone.`);
+    return 0;
+  }
+  throw new Error(`Unknown skills subcommand: ${sub}. Usage: agentforge skills [list|pending|diff|approve|reject].`);
+}
+
 export async function connectCommand(provider: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
   const name = provider ?? flagString(flags, 'provider');
   if (!name) throw new Error('Missing provider. Usage: agentforge connect <provider> (openai, anthropic, google, or custom).');

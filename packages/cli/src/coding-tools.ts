@@ -19,6 +19,7 @@ import {
 } from './permissions.js';
 import type { PermissionRule } from './permissions-store.js';
 import { createMemoryTool } from './memory/tool.js';
+import { createSkillManageTool, createSkillViewTool } from './skills/tools.js';
 
 /** Structural tool shape accepted by the workspace policy layer. */
 export type PolicyTool = Parameters<typeof applyWorkspacePolicy>[0];
@@ -41,6 +42,8 @@ export interface CodingToolsOptions {
   memoryGlobal?: boolean;
   /** When true, memory writes are rejected (read-only contexts). */
   memoryReadOnly?: boolean;
+  /** Staged skill writes (review flow) instead of direct apply. */
+  skillWriteApproval?: boolean;
 }
 
 /**
@@ -64,11 +67,14 @@ export function createCodingTools(options: CodingToolsOptions = {}): PolicyTool[
   if (allowedCommands.length) tools.push(createRunCommandTool({ root, allowedCommands }) as unknown as PolicyTool);
   tools.push(createRunTestsTool({ root, testCommand: options.testCommand }) as unknown as PolicyTool);
   const mode = currentPermissionMode();
+  const readOnly = mode === 'read-only';
   const memory = createMemoryTool({
     root,
     global: options.memoryGlobal,
-    readOnly: options.memoryReadOnly || mode === 'read-only',
+    readOnly: options.memoryReadOnly || readOnly,
   }) as unknown as PolicyTool;
   tools.push(memory);
+  tools.push(createSkillViewTool({ root }) as unknown as PolicyTool);
+  tools.push(createSkillManageTool({ root, writeApproval: options.skillWriteApproval ?? false }) as unknown as PolicyTool);
   return tools.map((tool) => applyWorkspacePolicy(tool, policy));
 }

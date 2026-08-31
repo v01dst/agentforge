@@ -1,5 +1,5 @@
 import { formatError, error, info } from './output.js';
-import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, mcpCommand, modelsCommand, modelsTestCommand, permissionsCommand, pluginsAddCommand, pluginsCommand, pluginsLifecycleCommand, pluginsRemoveCommand, providersCommand, sessionsCommand, runCommand, testCommand, workflowsValidateCommand } from './commands.js';
+import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, mcpCommand, modelsCommand, modelsTestCommand, permissionsCommand, pluginsAddCommand, pluginsCommand, pluginsLifecycleCommand, pluginsRemoveCommand, providersCommand, sessionsCommand, runCommand, skillsCommand, testCommand, workflowsValidateCommand } from './commands.js';
 import type { ParsedCli } from './types.js';
 
 export function parseArgs(argv: string[]): ParsedCli {
@@ -76,6 +76,8 @@ export async function execute(argv: string[] = process.argv.slice(2)): Promise<n
     case 'sessions': return await sessionsCommand(parsed.args, parsed.flags);
 
     case 'permissions': return await permissionsCommand(parsed.args, parsed.flags);
+
+    case 'skills': return await skillsCommand(parsed.args, parsed.flags);
     default: throw new Error(`Unknown command: ${parsed.command}. Run agentforge --help.`);
   }
 }
