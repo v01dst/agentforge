@@ -251,6 +251,30 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
       },
     },
     {
+      name: 'plan',
+      description: 'Switch to plan mode: read-only posture for exploration and planning',
+      usage: '/plan',
+      category: 'config',
+      run: async (_args, cmdCtx) => {
+        const { setPermissionMode } = await import('../../permissions.js');
+        setPermissionMode('read-only');
+        cmdCtx.refreshStatus();
+        cmdCtx.pushSystem('plan mode: read-only posture — explore and design, edits and commands will be declined');
+      },
+    },
+    {
+      name: 'build',
+      description: 'Switch to build mode: workspace-write posture for implementation',
+      usage: '/build',
+      category: 'config',
+      run: async (_args, cmdCtx) => {
+        const { setPermissionMode } = await import('../../permissions.js');
+        setPermissionMode('workspace-write');
+        cmdCtx.refreshStatus();
+        cmdCtx.pushSystem('build mode: workspace-write posture — edits allowed in the workspace');
+      },
+    },
+    {
       name: 'agents',
       description: 'Pick an agent entry to run',
       usage: '/agents',

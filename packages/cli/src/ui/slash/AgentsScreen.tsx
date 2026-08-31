@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { loadConfig } from '../../config.js';
 import type { NamedEntry } from '../../types.js';
+import { listAgentsSync } from '../../agents/agents.js';
 
 interface AgentRow {
   name: string;
   description: string;
-  kind: 'entry' | 'agent';
+  kind: 'entry' | 'agent' | 'md';
+  detail?: string;
 }
 
 function toRows(entry: string | undefined, agents: readonly (string | NamedEntry)[] | undefined): AgentRow[] {
@@ -15,6 +17,11 @@ function toRows(entry: string | undefined, agents: readonly (string | NamedEntry
   for (const agent of agents ?? []) {
     if (typeof agent === 'string') rows.push({ name: agent, description: '(no description)', kind: 'agent' });
     else rows.push({ name: agent.name, description: agent.description ?? '(no description)', kind: 'agent' });
+  }
+  // Markdown agent definitions (Phase F): mode + posture as detail.
+  for (const md of listAgentsSync(process.cwd())) {
+    const detail = `${md.mode}${md.permission ? ` · ${md.permission}` : ''}${md.source !== 'builtin' ? ` · ${md.source}` : ''}`;
+    rows.push({ name: md.name, description: md.description ?? '(no description)', kind: 'md', detail });
   }
   return rows;
 }
@@ -51,6 +58,10 @@ export function AgentsScreen({
     if (key.upArrow) { setSelected((s) => Math.max(0, s - 1)); return; }
     if (key.downArrow) { setSelected((s) => Math.min(rows.length - 1, s + 1)); return; }
     if (key.return && current) {
+      if (current.kind === 'md') {
+        pushSystem(`${current.name} — ${current.detail}: ${current.description}`);
+        return;
+      }
       process.env.AGENTFORGE_ENTRY = current.name;
       pushSystem(`Active entry: ${current.name} (${current.description})`);
       openScreen('run');
@@ -70,7 +81,7 @@ export function AgentsScreen({
                 <Text key={`${row.kind}:${row.name}`} color={index === selected ? 'cyan' : undefined}>
                   {index === selected ? '❯ ' : '  '}
                   {row.name}
-                  <Text dimColor> — {row.kind === 'entry' ? `entry · ${row.description}` : row.description}</Text>
+                  <Text dimColor> — {row.kind === 'entry' ? `entry · ${row.description}` : row.kind === 'md' ? `${row.detail} · ${row.description}` : row.description}</Text>
                 </Text>
               ))}
       </Box>
@@ -78,7 +89,7 @@ export function AgentsScreen({
         <Box flexDirection="column" marginTop={1} borderStyle="round" paddingX={1}>
           <Text bold>{current.name}</Text>
           <Text dimColor>{current.description}</Text>
-          <Text>enter — switch to this entry and open the runner</Text>
+          <Text>{current.kind === 'md' ? 'markdown agent definition' : 'enter — switch to this entry and open the runner'}</Text>
         </Box>
       ) : null}
     </Box>

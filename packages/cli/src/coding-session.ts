@@ -9,6 +9,7 @@ import { detectDefaultProvider } from './model-runner.js';
 import { readPermissionRulesSync } from './permissions-store.js';
 import { loadMemorySync, loadPersonaSourcesSync, renderPersonaBlock } from './memory/store.js';
 import { listSkillsSync, renderSkillIndex } from './skills/skills.js';
+import { listAgentsSync, renderAgentIndex } from './agents/agents.js';
 import type { AgentForgePlugin } from './plugins/plugins.js';
 import { createReflectionRuntime, type ReflectionConfig } from './reflection/review.js';
 import { createCompressionInterceptor } from './context/compression.js';
@@ -69,7 +70,14 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
   const events = new EventBus();
   const approver = options.requestApproval ?? ((request: ApprovalRequest) => requestToolApproval(request));
   const permissionRules = readPermissionRulesSync(root);
-  const codingTools: ToolLike[] = createCodingTools({ root, requestApproval: approver, permissionRules }) as unknown as ToolLike[];
+  const codingTools: ToolLike[] = createCodingTools({
+    root,
+    requestApproval: approver,
+    permissionRules,
+    subagentModel: options.modelInstance,
+    subagentProvider: detected.provider,
+    subagentModelName: detected.model,
+  }) as unknown as ToolLike[];
 
   // Frozen snapshot: persona + memory are captured once at runner build
   // (session start) and never mutate mid-session — tool results show live state.
@@ -86,6 +94,9 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
   // load on demand through skill_view, or directly when /skills selects them.
   const skillIndex = renderSkillIndex(listSkillsSync(root));
   if (skillIndex) instructionBlocks.push(skillIndex);
+  // Phase F: subagent index so the model knows which agents it can delegate to.
+  const agentIndex = renderAgentIndex(listAgentsSync(root));
+  if (agentIndex) instructionBlocks.push(agentIndex);
   const memorySnapshot = loadMemorySync('memory', root);
   if (memorySnapshot.entries.length) {
     instructionBlocks.push(`Persistent memory for future sessions — consolidate before adding when above 80% capacity.`);

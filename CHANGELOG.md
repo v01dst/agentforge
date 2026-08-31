@@ -4,6 +4,16 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### Agents & subagents (Phase F — multi-project plan)
+
+- Markdown agent definitions: `.agentforge/agents/<name>.md` (flat) or `.agentforge/agents/<name>/AGENT.md` (folder), with a global fallback at `~/.agentforge/agents/`. Project files shadow global ones, which shadow the built-ins, all matched by name. Frontmatter: `mode: primary|subagent` (default `subagent`), `description`, `model`, `temperature`, `steps` (child max iterations), `permission: read-only|workspace-write|trusted`. The markdown body is the agent's prompt.
+- Built-in subagents: `explore` (fast read-only codebase explorer) and `general` (general-purpose multi-step worker) — synthesized unless user files redefine them.
+- New `task` tool: delegates a self-contained prompt to a named subagent and returns its final report (capped). The child agent runs with a posture-filtered toolset derived from the agent's `permission` — one policy layer: read-only subagents literally receive no write/command tools, and all child tools still pass through the same workspace policy. Subagents never receive `skill_manage` or memory-write duties.
+- Subagent index injected into coding-session instructions so the primary model knows which agents exist; `agentforge agents list` data flows through the existing `/agents` screen (markdown agents shown with mode + posture; selecting one no longer hijacks the project entry).
+- `@mention` routing hints: typing `@agent-name` in chat surfaces a delegation hint (registry scan only runs when the text contains `@`).
+- Plan/build modes: `/plan` switches to the read-only posture for exploration and design; `/build` returns to workspace-write. Enforced by the same permission layer (`setPermissionMode`), so declines are real policy, not prompt-politeness.
+- Tests: 9 new agent-registry/tool tests; reflection-test teardown hardened against the background-reviewer write race (retry cleanup).
+
 ### Loop upgrades: prompt caching, live compression, interrupt-and-redirect (Phase D — multi-project plan)
 
 - Anthropic prompt caching: the stable system prompt prefix is sent with a `cache_control` ephemeral marker on both `generate` and streaming requests, cutting repeated input cost for long coding sessions.

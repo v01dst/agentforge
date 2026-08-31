@@ -20,6 +20,7 @@ import {
 import type { PermissionRule } from './permissions-store.js';
 import { createMemoryTool } from './memory/tool.js';
 import { createSkillManageTool, createSkillViewTool } from './skills/tools.js';
+import { createTaskTool } from './agents/task-tool.js';
 
 /** Structural tool shape accepted by the workspace policy layer. */
 export type PolicyTool = Parameters<typeof applyWorkspacePolicy>[0];
@@ -44,6 +45,13 @@ export interface CodingToolsOptions {
   memoryReadOnly?: boolean;
   /** Staged skill writes (review flow) instead of direct apply. */
   skillWriteApproval?: boolean;
+  /** Backing model for the `task` tool's subagent runs (tests / shared provider). */
+  subagentModel?: unknown;
+  /** Provider/model used to back `task` subagent runs when no instance is given. */
+  subagentProvider?: string;
+  subagentModelName?: string;
+  /** When true, the `task` delegation tool is not registered (subagents disabled). */
+  disableSubagents?: boolean;
 }
 
 /**
@@ -76,5 +84,17 @@ export function createCodingTools(options: CodingToolsOptions = {}): PolicyTool[
   tools.push(memory);
   tools.push(createSkillViewTool({ root }) as unknown as PolicyTool);
   tools.push(createSkillManageTool({ root, writeApproval: options.skillWriteApproval ?? false }) as unknown as PolicyTool);
+  if (!options.disableSubagents) {
+    tools.push(createTaskTool({
+      root,
+      modelInstance: options.subagentModel,
+      provider: options.subagentProvider,
+      model: options.subagentModelName,
+      allowedCommands: options.allowedCommands,
+      testCommand: options.testCommand,
+      requestApproval: options.requestApproval,
+      permissionRules: options.permissionRules,
+    }, root) as unknown as PolicyTool);
+  }
   return tools.map((tool) => applyWorkspacePolicy(tool, policy));
 }

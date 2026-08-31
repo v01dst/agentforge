@@ -23,7 +23,13 @@ async function withTemp(fn: (root: string) => Promise<void>): Promise<void> {
   try {
     await fn(root);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    // The background reviewer may still be finishing a write (memory/skill
+    // staging) after the assertions pass; retry cleanup so the race cannot
+    // fail the test at teardown.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try { await rm(root, { recursive: true, force: true }); break; }
+      catch { await sleep(50); }
+    }
   }
 }
 

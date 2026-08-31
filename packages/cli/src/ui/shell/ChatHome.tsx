@@ -8,6 +8,7 @@ import { ActivityIndicator } from './Activity.js';
 import { colors } from './theme.js';
 import { listSessions, loadSession, newSessionId, renameSession, saveSession, SESSION_SCHEMA_VERSION, compactTranscript } from '../../sessions/store.js';
 import { loadMemory } from '../../memory/store.js';
+import { listAgentsSync, extractAgentMentions } from '../../agents/agents.js';
 import { validateProviderConnection } from '../../global-config.js';
 import type { GlobalProviderEntry } from '../../global-config.js';
 
@@ -46,6 +47,8 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { name: 'providers', description: 'List configured providers' },
   { name: 'models', description: 'List available models for the active provider' },
   { name: 'model', description: 'Select the active model', usage: '/model <name>' },
+  { name: 'plan', description: 'Switch to plan mode (read-only posture)' },
+  { name: 'build', description: 'Switch to build mode (workspace-write posture)' },
   { name: 'tools', description: 'List available tools' },
   { name: 'skills', description: 'List or toggle agent skills', usage: '/skills [name]' },
   { name: 'agents', description: 'List registered agents' },
@@ -225,6 +228,12 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
     draftRef.current = '';
     if (!raw.startsWith('/')) {
       if (handleOnboardingInput(raw)) return;
+      // @mention (Phase F): inline `@agent` tokens hint at subagent delegation.
+      // Registry scan only runs when the text actually contains '@'.
+      if (raw.includes('@')) {
+        const mentions = extractAgentMentions(raw, listAgentsSync(process.cwd()).map((agent) => agent.name));
+        if (mentions.length) pushSystem(`delegating hint: @${mentions.join(' @')}`);
+      }
       if (running) {
         // Interrupt-and-redirect (Phase D): a new message during a run cancels
         // the turn and resends as soon as it settles.

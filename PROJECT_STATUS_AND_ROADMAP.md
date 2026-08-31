@@ -991,7 +991,7 @@ data · "model-visible means logged" · one policy layer everywhere · everythin
 
 | Ver | Phases |
 | --- | --- |
-| 0.1.0 | A memory core ✅ · N plugin kernel + interceptor seam ✅ · B skills upgrade ✅ · C reflection ✅ · D loop upgrades ✅ · F agents/subagents · G permissions v2 |
+| 0.1.0 | A memory core ✅ · N plugin kernel + interceptor seam ✅ · B skills upgrade ✅ · C reflection ✅ · D loop upgrades ✅ · F agents/subagents ✅ · G permissions v2 |
 | 0.2.0 | H session manager (NDJSON log-as-truth) · I LSP bridge · P profiles · Q observability core · R security findings · T session modes |
 | 0.3.0 | J gateway serve (+OpenAI-compatible agent-as-model) · K daemon + heartbeat · S benchmarking |
 | 0.4.0 | L channel adapters (webhook + Telegram) · M device tools |
@@ -1035,6 +1035,15 @@ Phase D — loop upgrades (landed):
 - [x] Live context compression: deterministic `preRequest` interceptor folds oversized histories (96k-char default trigger, 20 recent messages kept verbatim); `compression` session options.
 - [x] TUI interrupt-and-redirect: submitting during a run cancels the in-flight turn and queues the message, re-sent when the runner settles.
 - [x] Tests: `packages/models/test/loop-upgrades.test.ts` (caching wire format + compression fold); models + CLI + core suites green.
+
+Phase F — agents & subagents (landed):
+
+- [x] Markdown agent definitions: `.agentforge/agents/<name>.md` + folder `AGENT.md` layout, global fallback, project-shadows-global-shadows-builtin; frontmatter `mode/description/model/temperature/steps/permission`.
+- [x] Built-in `explore` (read-only) and `general` (workspace-write) subagents; `listAgentsSync`/`getAgentSync`/`renderAgentIndex`.
+- [x] `task` tool: synchronous subagent runs with posture-filtered child toolsets (one policy layer; child tools re-wrapped with the agent's permission mode).
+- [x] Subagent index in session instructions; `/agents` screen lists markdown agents (mode + posture, no entry hijack); `@mention` delegation hints in chat.
+- [x] `/plan` (read-only posture) and `/build` (workspace-write posture) mode switches.
+- [x] Tests: 9 new; reflection teardown hardened; CLI suite green.
 
 ## 16. Definition of “Ready to Use”
 
