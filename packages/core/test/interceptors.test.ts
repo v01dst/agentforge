@@ -101,4 +101,40 @@ describe('interceptor seam', () => {
     const result = await agent.run('go');
     expect(result.output).toBe('[reviewed] raw output');
   });
+
+  it('tools execute when no allowlist is configured (policy layer governs)', async () => {
+    const permittedTool = {
+      name: 'reader',
+      description: 'Reads things',
+      permissions: ['filesystem:read'],
+      inputSchema: z.object({}),
+      execute: async () => ({ ok: true }),
+    };
+    const agent = new Agent({
+      name: 't',
+      model: model([{ content: '', toolCalls: [{ id: 'c1', name: 'reader', arguments: {} }] }, { content: 'done' }]),
+      tools: [permittedTool],
+    });
+    const result = await agent.run('go');
+    expect(result.toolCalls[0]?.error).toBeUndefined();
+    expect(result.toolCalls[0]?.output).toEqual({ ok: true });
+  });
+
+  it('an explicit allowlist still enforces at the core level', async () => {
+    const permittedTool = {
+      name: 'writer',
+      description: 'Writes things',
+      permissions: ['filesystem:write'],
+      inputSchema: z.object({}),
+      execute: async () => ({ ok: true }),
+    };
+    const agent = new Agent({
+      name: 't',
+      model: model([{ content: '', toolCalls: [{ id: 'c1', name: 'writer', arguments: {} }] }, { content: 'done' }]),
+      tools: [permittedTool],
+      allowedToolPermissions: ['filesystem:read'],
+    });
+    const result = await agent.run('go');
+    expect(result.toolCalls[0]?.error?.message).toContain('requires permissions');
+  });
 });

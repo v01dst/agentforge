@@ -10,6 +10,7 @@ import { readPermissionRulesSync } from './permissions-store.js';
 import { loadMemorySync, loadPersonaSourcesSync, renderPersonaBlock } from './memory/store.js';
 import { listSkillsSync, renderSkillIndex } from './skills/skills.js';
 import type { AgentForgePlugin } from './plugins/plugins.js';
+import { createReflectionRuntime, type ReflectionConfig } from './reflection/review.js';
 
 export interface CodingSessionOptions {
   /** Workspace root for repository tools (defaults to cwd). */
@@ -25,6 +26,8 @@ export interface CodingSessionOptions {
   requestApproval?: (request: ApprovalRequest) => Promise<ApprovalDecision>;
   /** Plugin hook contributions merged into the core interceptor seam. */
   pluginHooks?: AgentForgePlugin['hooks'];
+  /** Phase C reflection config; enabled only when explicitly configured. */
+  reflection?: ReflectionConfig;
 }
 
 interface QueuedEvent {
@@ -86,6 +89,12 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
     instructionBlocks.push(memorySnapshot.entries.join('§'));
   }
 
+  // Phase C: reflection runtime (off by default) contributes observe-only
+  // interceptors; its reviewer writes go through the same gated tools.
+  const reflection = options.reflection?.enabled
+    ? createReflectionRuntime({ ...options.reflection, root })
+    : undefined;
+
   const agent = new Agent({
     name: 'agentforge',
     model: backing as never,
@@ -93,11 +102,17 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
     instructions: instructionBlocks.filter(Boolean).join('\n\n'),
     events,
     interceptors: {
-      preStep: options.pluginHooks?.preStep as never,
+      preStep: [
+        ...(reflection?.interceptors.preStep ?? []),
+        ...(options.pluginHooks?.preStep as never[] ?? []),
+      ],
       preRequest: options.pluginHooks?.preRequest as never,
       preTool: options.pluginHooks?.preTool as never,
       postTool: options.pluginHooks?.postTool as never,
-      turnStopping: options.pluginHooks?.turnStopping as never,
+      turnStopping: [
+        ...(reflection?.interceptors.turnStopping ?? []),
+        ...(options.pluginHooks?.turnStopping as never[] ?? []),
+      ],
     },
   });
 

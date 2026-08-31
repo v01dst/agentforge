@@ -28,12 +28,19 @@ export async function launchInteractiveShell(options: { initialMessages?: import
   const { buildAgentRunner } = await import('./coding-session.js');
   const { detectDefaultProvider } = await import('./model-runner.js');
   const { pluginContributions } = await import('./plugins/plugins.js');
-  const pluginHooks = (await pluginContributions()).hooks as never;
+  const { readGlobalConfig } = await import('./global-config.js');
+  const [contributions, globalCfg] = await Promise.all([pluginContributions(), readGlobalConfig()]);
+  const pluginHooks = contributions.hooks as never;
   const detectedProviderModel = detectDefaultProvider();
+  const reflection = {
+    enabled: globalCfg.reflection?.enabled === true,
+    provider: globalCfg.reflection?.provider,
+    model: globalCfg.reflection?.model,
+  };
   let resolved = {
     provider: detectedProviderModel.provider,
     model: detectedProviderModel.model,
-    runner: buildAgentRunner({ root: process.cwd(), pluginHooks }),
+    runner: buildAgentRunner({ root: process.cwd(), pluginHooks, reflection }),
   };
   let projectName: string | undefined;
 

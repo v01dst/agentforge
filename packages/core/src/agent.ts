@@ -24,14 +24,14 @@ export class Agent {
   readonly maxIterations: number;
   readonly timeoutMs?: number;
   readonly modelRetries: number;
-  readonly allowedToolPermissions: readonly string[];
+  readonly allowedToolPermissions: readonly string[] | undefined;
   readonly responseFormat?: ModelRequest['responseFormat'];
   readonly metadata?: Record<string, unknown>;
   readonly events: EventBus;
   readonly interceptors: AgentInterceptors;
   constructor(config: AgentConfig & { events?: EventBus }) {
     this.name = config.name; this.model = config.model; this.instructions = config.instructions;
-    this.tools = config.tools ?? []; this.maxIterations = config.maxIterations ?? 8; this.timeoutMs = config.timeoutMs; this.modelRetries = config.modelRetries ?? 1; this.allowedToolPermissions = config.allowedToolPermissions ?? []; this.responseFormat = config.responseFormat; this.metadata = config.metadata; this.events = config.events ?? new EventBus();
+    this.tools = config.tools ?? []; this.maxIterations = config.maxIterations ?? 8; this.timeoutMs = config.timeoutMs; this.modelRetries = config.modelRetries ?? 1; this.allowedToolPermissions = config.allowedToolPermissions; this.responseFormat = config.responseFormat; this.metadata = config.metadata; this.events = config.events ?? new EventBus();
     this.interceptors = config.interceptors ?? {};
   }
 
@@ -99,7 +99,11 @@ export class Agent {
       await this.emit({ type: 'tool.failed', runId, data: { tool: tool.name, error: error.message, attempts: 0 } });
       return { id: call.id, name: call.name, input: call.arguments, error, durationMs: Date.now() - started, attempts: 0 };
     }
-    const allowed = new Set(options.allowedToolPermissions ?? this.allowedToolPermissions); const missing = (tool.permissions ?? []).filter((permission) => !allowed.has(permission));
+    // One policy layer: when no allowlist is configured, tool permissions are
+    // governed by the wrapper layer (e.g. the CLI workspace policy). An
+    // explicit allowlist (possibly empty) still enforces at the core level.
+    const allowed = options.allowedToolPermissions ?? this.allowedToolPermissions;
+    const missing = allowed === undefined ? [] : (tool.permissions ?? []).filter((permission) => !allowed.includes(permission));
     if (missing.length) { const error = new PermissionDeniedError(tool.name, missing); await this.emit({ type: 'tool.failed', runId, data: { tool: tool.name, error: error.message, permissions: missing, attempts: 0 } }); return { id: call.id, name: call.name, input: call.arguments, error, durationMs: Date.now() - started, attempts: 0 }; }
     let attempts = 0; const retries = tool.retries ?? 0; let lastError: unknown;
     while (attempts <= retries) { attempts += 1; try {

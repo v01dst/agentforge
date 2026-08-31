@@ -25,6 +25,8 @@ export interface GlobalConfig {
   recentProjects: string[];
   /** Default true. */
   sessionHistory: boolean;
+  /** Phase C reflection review (post-turn self-improvement). Off by default. */
+  reflection?: { enabled: boolean; provider?: string; model?: string };
 }
 
 export const RECENT_PROJECT_LIMIT = 10;
@@ -61,6 +63,13 @@ function normalizeConfig(value: unknown): GlobalConfig {
     }),
     recentProjects: Array.isArray(value.recentProjects) ? value.recentProjects.filter((p): p is string => typeof p === 'string') : [],
     sessionHistory: value.sessionHistory !== false,
+    reflection: isRecord(value.reflection)
+      ? {
+          enabled: value.reflection.enabled === true,
+          provider: typeof value.reflection.provider === 'string' ? value.reflection.provider : undefined,
+          model: typeof value.reflection.model === 'string' ? value.reflection.model : undefined,
+        }
+      : undefined,
   };
 }
 
