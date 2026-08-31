@@ -2,6 +2,23 @@ import type { Message, ModelChunk, ModelProvider, ModelRequest, ModelResponse, T
 
 export interface HttpModelOptions { apiKey?: string; baseUrl?: string; fetch?: typeof globalThis.fetch; headers?: Record<string, string>; }
 
+/** Typed HTTP failure so callers can classify retries instead of parsing messages. */
+export class ModelHttpError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+    /** Retry-After hint in milliseconds when the server sent one (seconds form). */
+    public readonly retryAfterMs?: number,
+  ) {
+    super(message);
+    this.name = 'ModelHttpError';
+  }
+  /** 429 and 5xx are transient; auth/permission/not-found failures are not. */
+  get retryable(): boolean {
+    return this.status === 429 || this.status >= 500;
+  }
+}
+
 const id = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 const usage = (input = 0, output = 0): TokenUsage => ({ inputTokens: input, outputTokens: output, totalTokens: input + output });
 const asString = (value: unknown): string => typeof value === 'string' ? value : value == null ? '' : JSON.stringify(value);
@@ -33,6 +50,64 @@ export class OpenAIModel implements ModelProvider {
     const response = await this.fetcher(`${this.options.baseUrl ?? 'https://api.openai.com/v1'}/chat/completions`, { method: 'POST', headers: { 'content-type': 'application/json', ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}), ...this.options.headers }, body: JSON.stringify({ model: request.model ?? this.model, messages: request.messages, temperature: request.temperature, max_tokens: request.maxTokens, tools: request.tools?.map((tool) => ({ type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.parameters } })), response_format: request.responseFormat?.type === 'json' ? { type: 'json_object' } : undefined }), signal: request.signal });
     return parseOpenAI(await parseResponse(response), this.model);
   }
+
+  async *stream(request: ModelRequest): AsyncIterable<ModelChunk> {
+    const apiKey = this.options.apiKey ?? process.env.OPENAI_API_KEY;
+    if (!apiKey && !this.options.baseUrl) throw new Error('OPENAI_API_KEY is required for the OpenAI provider');
+    const response = await this.fetcher(`${this.options.baseUrl ?? 'https://api.openai.com/v1'}/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'text/event-stream', ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}), ...this.options.headers },
+      body: JSON.stringify({
+        model: request.model ?? this.model,
+        messages: request.messages,
+        temperature: request.temperature,
+        max_tokens: request.maxTokens,
+        stream: true,
+        stream_options: { include_usage: true },
+        tools: request.tools?.map((tool) => ({ type: 'function', function: { name: tool.name, description: tool.description, parameters: tool.parameters } })),
+      }),
+      signal: request.signal,
+    });
+    if (!response.ok) await parseResponse(response); // throws the typed ModelHttpError
+    yield* emitStream(this.openAiParts(response), id('openai'));
+  }
+
+  private async *openAiParts(response: Response): AsyncGenerator<StreamPart, void, unknown> {
+    // Streamed tool calls arrive as index-keyed fragments; accumulate and
+    // assemble them once at the end instead of parsing partial JSON per chunk.
+    const tools = new Map<number, { id?: string; name?: string; arguments: string }>();
+    for await (const event of sseEvents(response)) {
+      const data = sseData(event);
+      if (!data || data === '[DONE]') continue;
+      let parsed: {
+        id?: string;
+        choices?: Array<{ delta?: { content?: string | null; tool_calls?: Array<{ index?: number; id?: string; function?: { name?: string; arguments?: string } }> } }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
+      try { parsed = JSON.parse(data); } catch { continue; }
+      const choice = parsed.choices?.[0];
+      for (const call of choice?.delta?.tool_calls ?? []) {
+        const index = call.index ?? 0;
+        const slot = tools.get(index) ?? { arguments: '' };
+        if (call.id) slot.id = call.id;
+        if (call.function?.name) slot.name = call.function.name;
+        if (call.function?.arguments) slot.arguments += call.function.arguments;
+        tools.set(index, slot);
+      }
+      yield {
+        text: choice?.delta?.content ?? undefined,
+        usage: parsed.usage ? usage(parsed.usage.prompt_tokens, parsed.usage.completion_tokens) : undefined,
+        raw: parsed,
+      };
+    }
+    if (tools.size) {
+      yield {
+        toolCalls: [...tools.entries()]
+          .sort((left, right) => left[0] - right[0])
+          .map(([, slot]) => ({ id: slot.id ?? id('tool'), name: slot.name ?? '', arguments: parseArgs(slot.arguments) })),
+      };
+    }
+  }
 }
 
 export class AnthropicModel implements ModelProvider {
@@ -50,6 +125,74 @@ export class AnthropicModel implements ModelProvider {
     const body = await parseResponse(response) as { id?: string; content?: Array<{ type: string; text?: string; id?: string; name?: string; input?: unknown }>; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number } };
     const calls = body.content?.filter((item) => item.type === 'tool_use').map((item) => ({ id: item.id ?? id('tool'), name: item.name ?? '', arguments: item.input })) ?? [];
     return { id: body.id ?? id('anthropic'), content: body.content?.filter((item) => item.type === 'text').map((item) => item.text ?? '').join('') ?? '', toolCalls: calls.length ? calls : undefined, finishReason: calls.length ? 'tool_calls' : 'stop', usage: usage(body.usage?.input_tokens, body.usage?.output_tokens), model: this.model, raw: body };
+  }
+
+  async *stream(request: ModelRequest): AsyncIterable<ModelChunk> {
+    const apiKey = this.options.apiKey ?? process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY is required for the Anthropic provider');
+    const system = request.messages.find((message) => message.role === 'system')?.content;
+    const messages = request.messages.filter((message) => message.role !== 'system').map((message) => ({ role: message.role === 'tool' ? 'user' : message.role, content: message.content }));
+    const response = await this.fetcher(`${this.options.baseUrl ?? 'https://api.anthropic.com/v1'}/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'text/event-stream', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', ...this.options.headers },
+      body: JSON.stringify({
+        model: request.model ?? this.model,
+        max_tokens: request.maxTokens ?? 1024,
+        system,
+        messages,
+        temperature: request.temperature,
+        stream: true,
+        tools: request.tools?.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })),
+      }),
+      signal: request.signal,
+    });
+    if (!response.ok) await parseResponse(response);
+    yield* emitStream(this.anthropicParts(response), id('anthropic'));
+  }
+
+  private async *anthropicParts(response: Response): AsyncGenerator<StreamPart, void, unknown> {
+    let inputTokens = 0;
+    let outputTokens = 0;
+    const tools: ToolCall[] = [];
+    for await (const event of sseEvents(response)) {
+      const data = sseData(event);
+      if (!data) continue;
+      let parsed: {
+        type?: string;
+        message?: { id?: string; usage?: { input_tokens?: number; output_tokens?: number } };
+        content_block?: { type?: string; id?: string; name?: string };
+        delta?: { type?: string; text?: string; partial_json?: string; stop_reason?: string };
+        usage?: { input_tokens?: number; output_tokens?: number };
+      };
+      try { parsed = JSON.parse(data); } catch { continue; }
+      if (parsed.type === 'message_start') inputTokens = parsed.message?.usage?.input_tokens ?? 0;
+      if (parsed.type === 'content_block_delta') {
+        if (parsed.delta?.type === 'text_delta' && parsed.delta.text) yield { text: parsed.delta.text };
+        if (parsed.delta?.type === 'input_json_delta') {
+          // Fragments accumulate onto the last started tool_use block.
+          const last = tools[tools.length - 1];
+          if (last) last.arguments = { __json: ((last.arguments as { __json?: string } | undefined)?.__json ?? '') + (parsed.delta.partial_json ?? '') };
+        }
+      }
+      if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'tool_use') {
+        tools.push({ id: parsed.content_block.id ?? id('tool'), name: parsed.content_block.name ?? '', arguments: { __json: '' } });
+      }
+      if (parsed.type === 'message_delta') {
+        outputTokens = parsed.usage?.output_tokens ?? outputTokens;
+      }
+      if (parsed.type === 'message_stop') break;
+    }
+    if (tools.length) {
+      yield {
+        toolCalls: tools.map((tool) => {
+          const json = (tool.arguments as { __json?: string }).__json ?? '';
+          let parsedArgs: unknown = {};
+          try { parsedArgs = json ? JSON.parse(json) : {}; } catch { parsedArgs = { value: json }; }
+          return { id: tool.id, name: tool.name, arguments: parsedArgs };
+        }),
+      };
+    }
+    if (inputTokens || outputTokens) yield { usage: usage(inputTokens, outputTokens) };
   }
 }
 
@@ -69,6 +212,47 @@ export class GeminiModel implements ModelProvider {
     const parts = body.candidates?.[0]?.content?.parts ?? []; const calls = parts.filter((part) => part.functionCall).map((part) => ({ id: id('gemini-tool'), name: part.functionCall?.name ?? '', arguments: part.functionCall?.args ?? {} }));
     const content = parts.filter((part) => part.text).map((part) => part.text).join('');
     return { id: id('gemini'), content, toolCalls: calls.length ? calls : undefined, finishReason: calls.length ? 'tool_calls' : 'stop', usage: usage(body.usageMetadata?.promptTokenCount, body.usageMetadata?.candidatesTokenCount), model: this.model, raw: body };
+  }
+
+  async *stream(request: ModelRequest): AsyncIterable<ModelChunk> {
+    const key = this.options.apiKey ?? process.env.GOOGLE_API_KEY ?? process.env.GEMINI_API_KEY ?? '';
+    if (!key) throw new Error('GOOGLE_API_KEY or GEMINI_API_KEY is required for the Gemini provider');
+    const endpoint = `${this.options.baseUrl ?? 'https://generativelanguage.googleapis.com/v1beta'}/models/${request.model ?? this.model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(key)}`;
+    const contents = request.messages.filter((message) => message.role !== 'system').map((message) => ({ role: message.role === 'assistant' ? 'model' : 'user', parts: [{ text: message.content }] }));
+    const response = await this.fetcher(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'text/event-stream', ...this.options.headers },
+      body: JSON.stringify({
+        contents,
+        systemInstruction: request.messages.find((message) => message.role === 'system') ? { parts: [{ text: request.messages.find((message) => message.role === 'system')?.content }] } : undefined,
+        generationConfig: { temperature: request.temperature, maxOutputTokens: request.maxTokens },
+      }),
+      signal: request.signal,
+    });
+    if (!response.ok) await parseResponse(response);
+    yield* emitStream(this.geminiParts(response), id('gemini'));
+  }
+
+  private async *geminiParts(response: Response): AsyncGenerator<StreamPart, void, unknown> {
+    const toolCalls: ToolCall[] = [];
+    let usageMetadata: { promptTokenCount?: number; candidatesTokenCount?: number } | undefined;
+    for await (const event of sseEvents(response)) {
+      const data = sseData(event);
+      if (!data) continue;
+      let parsed: {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string; functionCall?: { name?: string; args?: unknown } }> } }>;
+        usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+      };
+      try { parsed = JSON.parse(data); } catch { continue; }
+      usageMetadata = parsed.usageMetadata ?? usageMetadata;
+      const parts = parsed.candidates?.[0]?.content?.parts ?? [];
+      for (const part of parts) {
+        if (part.text) yield { text: part.text };
+        if (part.functionCall) toolCalls.push({ id: id('gemini-tool'), name: part.functionCall.name ?? '', arguments: part.functionCall.args ?? {} });
+      }
+    }
+    if (toolCalls.length) yield { toolCalls };
+    if (usageMetadata) yield { usage: usage(usageMetadata.promptTokenCount, usageMetadata.candidatesTokenCount) };
   }
 }
 
@@ -171,6 +355,81 @@ export function createConfiguredModel(definition: ProviderDefinition, env: NodeJ
   }
 }
 
-async function parseResponse(response: Response): Promise<unknown> { const text = await response.text(); let body: unknown; try { body = text ? JSON.parse(text) : {}; } catch { body = { text }; } if (!response.ok) throw new Error(`Model provider request failed (${response.status}): ${asString((body as { error?: unknown }).error ?? text)}`); return body; }
+function retryAfterMsOf(response: Response): number | undefined {
+  const raw = response.headers.get('retry-after');
+  if (!raw) return undefined;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.round(seconds * 1000);
+  const date = Date.parse(raw);
+  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : undefined;
+}
+
+async function parseResponse(response: Response): Promise<unknown> {
+  const text = await response.text();
+  let body: unknown;
+  try { body = text ? JSON.parse(text) : {}; } catch { body = { text }; }
+  if (!response.ok) {
+    throw new ModelHttpError(
+      response.status,
+      `Model provider request failed (${response.status}): ${asString((body as { error?: unknown }).error ?? text)}`,
+      retryAfterMsOf(response),
+    );
+  }
+  return body;
+}
+
+/** Yields raw SSE events (whitespace-normalized) from a fetch response body. */
+async function* sseEvents(response: Response): AsyncGenerator<string> {
+  const body = response.body;
+  if (!body) throw new ModelHttpError(response.status, 'Streaming response has no body');
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+      let boundary = buffer.indexOf('\n\n');
+      while (boundary >= 0) {
+        yield buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        boundary = buffer.indexOf('\n\n');
+      }
+    }
+    if (buffer.trim()) yield buffer;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/** Extracts the concatenated data payload of one SSE event. */
+function sseData(event: string): string | undefined {
+  const lines = event.split('\n').filter((line) => line.startsWith('data:'));
+  if (!lines.length) return undefined;
+  return lines.map((line) => line.slice(5).trim()).join('\n');
+}
+
+interface StreamPart {
+  text?: string;
+  toolCalls?: ToolCall[];
+  usage?: TokenUsage;
+  raw?: unknown;
+}
+
+/** Shared streaming assembly: collect text deltas, emit assembled tool calls, then done. */
+async function* emitStream(source: AsyncGenerator<StreamPart, void, unknown>, fallbackId: string): AsyncGenerator<ModelChunk> {
+  let streamId = fallbackId;
+  const pending: ToolCall[] = [];
+  for await (const part of source) {
+    if (part.raw && typeof (part.raw as { id?: unknown }).id === 'string') streamId = (part.raw as { id: string }).id;
+    if (part.text) yield { id: streamId, delta: part.text };
+    if (part.toolCalls?.length) pending.push(...part.toolCalls);
+    if (part.usage) yield { id: streamId, delta: '', usage: part.usage };
+  }
+  for (const call of pending) yield { id: streamId, delta: '', toolCall: call };
+  yield { id: streamId, delta: '', done: true };
+}
+
 function parseOpenAI(body: unknown, model: string): ModelResponse { const value = body as { id?: string; choices?: Array<{ message?: { content?: string | null; tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: string } }> }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number } }; const message = value.choices?.[0]?.message; const calls = message?.tool_calls?.map((call) => ({ id: call.id ?? id('tool'), name: call.function?.name ?? '', arguments: parseArgs(call.function?.arguments) })) ?? []; const finish = value.choices?.[0]?.finish_reason; return { id: value.id ?? id('openai'), content: message?.content ?? '', toolCalls: calls.length ? calls : undefined, finishReason: calls.length ? 'tool_calls' : finish === 'length' ? 'length' : 'stop', usage: usage(value.usage?.prompt_tokens, value.usage?.completion_tokens), model, raw: body }; }
 function parseArgs(value?: string): unknown { if (!value) return {}; try { return JSON.parse(value); } catch { return { value }; } }
