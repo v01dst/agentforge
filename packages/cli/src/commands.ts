@@ -71,7 +71,7 @@ Environment:
   AGENTFORGE_BASE_URL       Endpoint override for OpenAI-compatible providers
 `;
 
-const CHAT_HELP = 'Commands: /help /exit /clear /status /providers /tools /workflows /models /model <name> /mode [read-only|ask|workspace-write|trusted] /connect <provider>';
+const CHAT_HELP = 'Commands: /help /exit /clear /status /memory /providers /tools /workflows /models /model <name> /mode [read-only|ask|workspace-write|trusted] /connect <provider>';
 
 function flagBoolean(flags: Record<string, string | boolean>, key: string): boolean {
   return flags[key] === true || flags[key] === 'true';
@@ -210,6 +210,17 @@ async function handleChatSlash(line: string, session: ChatSession): Promise<'han
     case 'providers':
       await listCommand('providers', {});
       return 'handled';
+    case 'memory': {
+      const { loadMemory, renderSnapshot } = await import('./memory/store.js');
+      const cwd = process.cwd();
+      for (const target of ['memory', 'user'] as const) {
+        const snapshot = await loadMemory(target, cwd);
+        info(renderSnapshot(target, snapshot.entries));
+        info('');
+      }
+      hint('Entries persist across sessions. The agent edits them with the memory tool.');
+      return 'handled';
+    }
     case 'tools':
       await listCommand('tools', {});
       return 'handled';

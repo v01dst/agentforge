@@ -2,6 +2,17 @@
 
 All notable changes to AgentForge are documented here.
 
+## [Unreleased]
+
+### Persistent memory + workspace persona (Phase A — multi-project plan)
+
+- New memory module (`packages/cli/src/memory/`): `MEMORY.md` (agent notes, 2,200-char cap) and `USER.md` (user profile, 1,375-char cap) under `.agentforge/memories/` with global fallback `~/.agentforge/memories/`. Entries are `§`-separated; exact duplicates are rejected; capacity overflow returns the current entries plus consolidation guidance instead of failing silently.
+- New `memory` tool (`add | replace | remove` with unique-substring matching) — Zod-validated, `filesystem:write`-gated (denied in read-only), reported results always reflect live state. Writes read-modify-write within their own scope so a project write never absorbs global content.
+- **Workspace persona:** `.agentforge/SOUL.md` (persona) and root `AGENTS.md` (project conventions) are read at session start and injected into agent instructions — frozen snapshot pattern, no mid-session prompt mutation.
+- Memory snapshot injected the same way: the agent carries curated facts into new sessions; the `memory` tool result shows live state.
+- New `/memory` slash command (TUI + plain chat) shows both stores with usage; CHAT_HELP updated.
+- Scope decision: memory writes are approved at write time through the existing permission posture (denied in read-only); a staged pending/review flow arrives with Phase B skill staging.
+
 ## [0.0.2] — 2026-08-31
 
 ### Workflow documents: schema, validation, import/export (Phase 7)

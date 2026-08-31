@@ -7,6 +7,7 @@ import type { TurnRunner } from '../turn.js';
 import { ActivityIndicator } from './Activity.js';
 import { colors } from './theme.js';
 import { listSessions, loadSession, newSessionId, renameSession, saveSession, SESSION_SCHEMA_VERSION, compactTranscript } from '../../sessions/store.js';
+import { loadMemory } from '../../memory/store.js';
 import { validateProviderConnection } from '../../global-config.js';
 import type { GlobalProviderEntry } from '../../global-config.js';
 
@@ -41,6 +42,7 @@ export interface ChatHomeProps {
 export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { name: 'help', description: 'Show help and keyboard shortcuts' },
   { name: 'connect', description: 'Connect to a provider endpoint' },
+  { name: 'memory', description: 'Show persistent memory and user profile' },
   { name: 'providers', description: 'List configured providers' },
   { name: 'models', description: 'List available models for the active provider' },
   { name: 'model', description: 'Select the active model', usage: '/model <name>' },
@@ -243,6 +245,20 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
         pushSystem('rename will apply with the next autosave');
         titleRef.current = title.slice(0, 120);
       }
+      return;
+    }
+    if (command.name === 'memory') {
+      void (async () => {
+        const [memory, user] = await Promise.all([
+          loadMemory('memory'),
+          loadMemory('user'),
+        ]);
+        const format = (label: string, entries: string[], used: number, limit: number) => {
+          const pct = limit > 0 ? Math.round((used / limit) * 100) : 0;
+          return [`${label} — ${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} · ${used}/${limit} chars (${pct}%)`, ...entries.slice(-6).map((entry) => `  · ${entry.length > 100 ? `${entry.slice(0, 100)}…` : entry.replace(/\n/g, ' ')}`)];
+        };
+        pushSystem([...format('memory', memory.entries, memory.used, memory.limit), '', ...format('user profile', user.entries, user.used, user.limit)].join('\n'));
+      })();
       return;
     }
     if (command.name === 'show') {

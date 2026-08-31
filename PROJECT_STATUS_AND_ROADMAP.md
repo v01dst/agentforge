@@ -1,6 +1,6 @@
 # AgentForge: Project Status, Product Definition, and Roadmap
 
-Last updated: 2026-08-31 (v0.0.2 release: Phase 5 safety hardening, Phase 6 session depth, Phase 3 streaming/conformance, Phase 7 workflow documents)
+Last updated: 2026-08-31 (six-project adoption plan started — Phase A memory core landed)
 Current version: `0.0.1`  
 Repository status: active development / experimental
 
@@ -977,6 +977,37 @@ The project was rebranded **AgentForge v0.01** (`0.0.1`) alongside this work.
 - [x] Disable unreal controls ("coming soon" labels on workflows authoring/environment).
 - [ ] Connect CLI and playground to the same store (CLI now persists sessions under `.agentforge/sessions`; playground uses its own runs file).
 - [ ] Finish workflow persistence and editing.
+
+### Milestone G: Six-Project Adoption Plan — Phase A landed (2026-08-31)
+
+The next capability waves adopt proven concepts from six sources — Hermes Agent (learning loop),
+opencode (agent platform), OpenClaw (gateway/daemon/channels), DeepSeek Harness (plugin kernel +
+composition), AgentWatch (observability + deterministic benchmarks), plus session modes — re-expressed
+through AgentForge's own contracts ("AgentForge core wins": Zod tools, permission policy, EventBus,
+provider-neutral core; clean-room TypeScript, no code copying).
+
+**Doctrine:** observe-only findings (never gate) · deterministic-only benchmark scoring · local-first
+data · "model-visible means logged" · one policy layer everywhere · everything extends, nothing patches.
+
+| Ver | Phases |
+| --- | --- |
+| 0.1.0 | A memory core ✅ · N plugin kernel + interceptor seam · B skills upgrade · C reflection · D loop upgrades · F agents/subagents · G permissions v2 |
+| 0.2.0 | H session manager (NDJSON log-as-truth) · I LSP bridge · P profiles · Q observability core · R security findings · T session modes |
+| 0.3.0 | J gateway serve (+OpenAI-compatible agent-as-model) · K daemon + heartbeat · S benchmarking |
+| 0.4.0 | L channel adapters (webhook + Telegram) · M device tools |
+
+Phase A — memory core + workspace persona (landed):
+
+- [x] `MemoryStore`: MEMORY.md (2,200-char) / USER.md (1,375-char) in `.agentforge/memories/` + global fallback; `§` entries; dedupe; capacity errors with consolidation guidance.
+- [x] `memory` tool (add/replace/remove, unique-substring matching), Zod-validated, `filesystem:write`-gated, scope-local read-modify-write.
+- [x] Workspace persona: `.agentforge/SOUL.md` + `AGENTS.md` injected at session start (frozen snapshot).
+- [x] Memory snapshot injected into session instructions; `/memory` slash command (TUI + plain chat).
+- [x] 13 new tests; CLI suite 135 green; lint green.
+- [ ] Config plumbing for `memory: { enabled, userProfile, writeApproval }` (defaults + global-config section open).
+- [ ] Staged pending/review flow for memory writes (arrives with Phase B staging).
+
+Open follow-ups carried into Phase N: the interceptor seam (pre-step/pre-request/pre-tool/post-tool/turn-stopping)
+is the landing pad for reflection, doom-loop, findings scanning, and compression.
 
 ## 16. Definition of “Ready to Use”
 

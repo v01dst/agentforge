@@ -18,6 +18,7 @@ import {
   type ApprovalDecision,
 } from './permissions.js';
 import type { PermissionRule } from './permissions-store.js';
+import { createMemoryTool } from './memory/tool.js';
 
 /** Structural tool shape accepted by the workspace policy layer. */
 export type PolicyTool = Parameters<typeof applyWorkspacePolicy>[0];
@@ -36,6 +37,10 @@ export interface CodingToolsOptions {
   requestApproval?: (request: ApprovalRequest) => Promise<ApprovalDecision>;
   /** Per-tool allow/deny rules; deny blocks, allow skips prompting. */
   permissionRules?: readonly PermissionRule[];
+  /** Memory store scope: project (default) or global (~/.agentforge). */
+  memoryGlobal?: boolean;
+  /** When true, memory writes are rejected (read-only contexts). */
+  memoryReadOnly?: boolean;
 }
 
 /**
@@ -58,5 +63,12 @@ export function createCodingTools(options: CodingToolsOptions = {}): PolicyTool[
   ];
   if (allowedCommands.length) tools.push(createRunCommandTool({ root, allowedCommands }) as unknown as PolicyTool);
   tools.push(createRunTestsTool({ root, testCommand: options.testCommand }) as unknown as PolicyTool);
+  const mode = currentPermissionMode();
+  const memory = createMemoryTool({
+    root,
+    global: options.memoryGlobal,
+    readOnly: options.memoryReadOnly || mode === 'read-only',
+  }) as unknown as PolicyTool;
+  tools.push(memory);
   return tools.map((tool) => applyWorkspacePolicy(tool, policy));
 }

@@ -7,6 +7,7 @@ import type { ApprovalRequest, ApprovalDecision } from './permissions.js';
 import { requestToolApproval } from './approvals.js';
 import { detectDefaultProvider } from './model-runner.js';
 import { readPermissionRulesSync } from './permissions-store.js';
+import { loadMemorySync, loadPersonaSourcesSync, renderPersonaBlock } from './memory/store.js';
 
 export interface CodingSessionOptions {
   /** Workspace root for repository tools (defaults to cwd). */
@@ -60,15 +61,28 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
   const permissionRules = readPermissionRulesSync(root);
   const codingTools: ToolLike[] = createCodingTools({ root, requestApproval: approver, permissionRules }) as unknown as ToolLike[];
 
-  const agent = new Agent({
-    name: 'agentforge',
-    model: backing as never,
-    tools: [...codingTools, ...(options.extraTools ?? [])],
-    instructions: options.instructions ?? [
+  // Frozen snapshot: persona + memory are captured once at runner build
+  // (session start) and never mutate mid-session — tool results show live state.
+  const instructionBlocks: string[] = [
+    options.instructions ?? [
       'You are AgentForge, a terminal coding agent.',
       'Use the provided repository tools to inspect files, apply patches, and run commands when appropriate.',
       'Be concise and factual.',
     ].join(' '),
+  ];
+  const persona = renderPersonaBlock(loadPersonaSourcesSync(root));
+  if (persona) instructionBlocks.push(persona);
+  const memorySnapshot = loadMemorySync('memory', root);
+  if (memorySnapshot.entries.length) {
+    instructionBlocks.push(`Persistent memory for future sessions — consolidate before adding when above 80% capacity.`);
+    instructionBlocks.push(memorySnapshot.entries.join('§'));
+  }
+
+  const agent = new Agent({
+    name: 'agentforge',
+    model: backing as never,
+    tools: [...codingTools, ...(options.extraTools ?? [])],
+    instructions: instructionBlocks.filter(Boolean).join('\n\n'),
     events,
   });
 
