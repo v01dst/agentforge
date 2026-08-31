@@ -13,6 +13,8 @@ export interface McpServerConfig {
 export interface PluginEntry {
   name?: string;
   path: string;
+  /** Lifecycle: disabled plugins stay registered but never load. */
+  disabled?: boolean;
 }
 
 export interface ExtensionsFile {

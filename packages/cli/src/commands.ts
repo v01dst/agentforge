@@ -11,7 +11,7 @@ import { scaffold } from './project.js';
 import { readExtensions } from './extensions/store.js';
 import { listSkills, skillBodies } from './skills/skills.js';
 import { buildTurnRunner, resolveRunnable } from './ui/turn.js';
-import { loadProjectPlugins } from './plugins/plugins.js';
+import { loadProjectPlugins, PLUGIN_CONTRACT_VERSION } from './plugins/plugins.js';
 import { buildModelReport, createSessionFromModule, drainStream, formatTurnFooter, isCancelLike } from './session.js';
 import { addProviderEntry, readProviderEntries, removeProviderEntry, type ProviderEntry } from './providers-store.js';
 import { addPermissionRule, readPermissionRules, removePermissionRule } from './permissions-store.js';
@@ -640,17 +640,40 @@ export async function doctorCommand(flags: Record<string, string | boolean>): Pr
 export async function pluginsCommand(flags: Record<string, string | boolean>): Promise<number> {
   const extensions = await readExtensions();
   const { plugins, failures } = await loadProjectPlugins(extensions);
-  if (flagBoolean(flags, 'json')) { printJson({ plugins, failures }); return failures.length ? 1 : 0; }
+  const disabled = new Set((extensions.plugins ?? []).filter((entry) => typeof entry !== 'string' && entry.disabled).map((entry) => (entry as { path: string }).path));
+  if (flagBoolean(flags, 'json')) { printJson({ plugins, failures, disabled: [...disabled] }); return failures.length ? 1 : 0; }
   heading('AgentForge plugins');
   const entries = extensions.plugins ?? [];
   if (!entries.length) { hint('No plugins configured. Add one with `agentforge plugins add <path>` or .agentforge/extensions.json.'); return 0; }
   for (const plugin of plugins) {
-    success(`✓ ${plugin.name}${plugin.description ? ` — ${plugin.description}` : ''}`);
-    info(`    tools: ${plugin.tools.length ? plugin.tools.join(', ') : '(none)'}`); 
-    if (plugin.hasInstructions) info('    instructions: yes');
+    const isDisabled = disabled.has(plugin.path);
+    (isDisabled ? warn : success)(`${isDisabled ? '⏸' : '✓'} ${plugin.name}${plugin.description ? ` — ${plugin.description}` : ''}${isDisabled ? ' (disabled)' : ''}`);
+    info(`    contributes: ${plugin.contributions.length ? plugin.contributions.join(', ') : '(nothing)'}`);
+    if (plugin.tools.length) info(`    tools: ${plugin.tools.join(', ')}`);
+    if (plugin.slashCommands.length) info(`    slash: /${plugin.slashCommands.join(' /')}`);
+    if (plugin.compat !== undefined && plugin.compat > PLUGIN_CONTRACT_VERSION) warn(`    targets contract v${plugin.compat} (CLI implements v${PLUGIN_CONTRACT_VERSION})`);
   }
   for (const failure of failures) warn(`! ${failure.path}: ${failure.reason}`);
+  hint('Lifecycle: agentforge plugins enable|disable <name>');
   return failures.length ? 1 : 0;
+}
+
+/** Enable or disable a registered plugin by name (lifecycle persisted in extensions.json). */
+export async function pluginsLifecycleCommand(action: 'enable' | 'disable', name: string | undefined): Promise<number> {
+  if (!name) throw new Error(`Usage: agentforge plugins ${action} <name>.`);
+  const extensions = await readExtensions();
+  const { plugins } = await loadProjectPlugins(extensions);
+  const target = plugins.find((plugin) => plugin.name === name);
+  if (!target) throw new Error(`Plugin '${name}' is not loaded. Registered plugins: ${plugins.map((plugin) => plugin.name).join(', ') || '(none)'}.`);
+  const entries = (extensions.plugins ?? []).map((entry) => {
+    if (typeof entry === 'string') return entry;
+    if (resolve(entry.path) !== resolve(target.path)) return entry;
+    return { ...entry, disabled: action === 'disable' };
+  });
+  const { writeExtensions } = await import('./extensions/store.js');
+  await writeExtensions({ ...extensions, plugins: entries });
+  (action === 'disable' ? success : info)(`Plugin ${name} ${action}d. Restart the session for it to take effect.`);
+  return 0;
 }
 
 /** Register a plugin module path in .agentforge/extensions.json. */

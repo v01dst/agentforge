@@ -1,5 +1,5 @@
 import { formatError, error, info } from './output.js';
-import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, mcpCommand, modelsCommand, modelsTestCommand, permissionsCommand, pluginsAddCommand, pluginsCommand, pluginsRemoveCommand, providersCommand, sessionsCommand, runCommand, testCommand, workflowsValidateCommand } from './commands.js';
+import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, mcpCommand, modelsCommand, modelsTestCommand, permissionsCommand, pluginsAddCommand, pluginsCommand, pluginsLifecycleCommand, pluginsRemoveCommand, providersCommand, sessionsCommand, runCommand, testCommand, workflowsValidateCommand } from './commands.js';
 import type { ParsedCli } from './types.js';
 
 export function parseArgs(argv: string[]): ParsedCli {
@@ -67,7 +67,9 @@ export async function execute(argv: string[] = process.argv.slice(2)): Promise<n
       const sub = parsed.args[0];
       if (sub === 'add') return await pluginsAddCommand(parsed.args[1]);
       if (sub === 'remove' || sub === 'rm') return await pluginsRemoveCommand(parsed.args[1]);
-      if (sub && !['list', 'ls', 'l'].includes(sub)) throw new Error(`Unknown plugins subcommand: ${sub}. Usage: agentforge plugins [list|add|remove].`);
+      if (sub === 'enable') return await pluginsLifecycleCommand('enable', parsed.args[1]);
+      if (sub === 'disable') return await pluginsLifecycleCommand('disable', parsed.args[1]);
+      if (sub && !['list', 'ls', 'l'].includes(sub)) throw new Error(`Unknown plugins subcommand: ${sub}. Usage: agentforge plugins [list|add|remove|enable|disable].`);
       return await pluginsCommand(parsed.flags);
     }
     case 'mcp': return await mcpCommand(parsed.args, parsed.flags);

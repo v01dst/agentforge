@@ -27,11 +27,13 @@ export async function launchInteractiveShell(options: { initialMessages?: import
   // entrypoint can still override the runner, but is never required.
   const { buildAgentRunner } = await import('./coding-session.js');
   const { detectDefaultProvider } = await import('./model-runner.js');
+  const { pluginContributions } = await import('./plugins/plugins.js');
+  const pluginHooks = (await pluginContributions()).hooks as never;
   const detectedProviderModel = detectDefaultProvider();
   let resolved = {
     provider: detectedProviderModel.provider,
     model: detectedProviderModel.model,
-    runner: buildAgentRunner({ root: process.cwd() }),
+    runner: buildAgentRunner({ root: process.cwd(), pluginHooks }),
   };
   let projectName: string | undefined;
 

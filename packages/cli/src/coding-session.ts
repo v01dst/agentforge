@@ -8,6 +8,7 @@ import { requestToolApproval } from './approvals.js';
 import { detectDefaultProvider } from './model-runner.js';
 import { readPermissionRulesSync } from './permissions-store.js';
 import { loadMemorySync, loadPersonaSourcesSync, renderPersonaBlock } from './memory/store.js';
+import type { AgentForgePlugin } from './plugins/plugins.js';
 
 export interface CodingSessionOptions {
   /** Workspace root for repository tools (defaults to cwd). */
@@ -21,6 +22,8 @@ export interface CodingSessionOptions {
   extraTools?: readonly ToolLike[];
   /** Queue bridge for tests; defaults to the UI approval bus. */
   requestApproval?: (request: ApprovalRequest) => Promise<ApprovalDecision>;
+  /** Plugin hook contributions merged into the core interceptor seam. */
+  pluginHooks?: AgentForgePlugin['hooks'];
 }
 
 interface QueuedEvent {
@@ -84,6 +87,13 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
     tools: [...codingTools, ...(options.extraTools ?? [])],
     instructions: instructionBlocks.filter(Boolean).join('\n\n'),
     events,
+    interceptors: {
+      preStep: options.pluginHooks?.preStep as never,
+      preRequest: options.pluginHooks?.preRequest as never,
+      preTool: options.pluginHooks?.preTool as never,
+      postTool: options.pluginHooks?.postTool as never,
+      turnStopping: options.pluginHooks?.turnStopping as never,
+    },
   });
 
   return async function* runAgentTurn(input, signal, context): AsyncGenerator<TurnDelta> {
@@ -109,7 +119,7 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
     });
 
     try {
-      const runPromise = agent.run(withSkills(input, context.skills), { signal })
+      const runPromise = agent.run(withSkills(input, context?.skills), { signal })
         .then((result: unknown) => push({ result }))
         .catch((error: unknown) => push({ error }));
 

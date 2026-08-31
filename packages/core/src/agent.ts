@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { EventBus } from './events.js';
+import { firstDenial, foldSerial, foldWaterfall, type AgentInterceptors } from './interceptors.js';
 import type { AgentConfig, AgentEvent, AgentResult, AgentRunOptions, Message, ModelChunk, ModelRequest, ModelResponse, ToolCall, ToolExecutionResult, ToolLike } from './types.js';
 import { addUsage, AgentForgeError, CancellationError, createRunId, emptyUsage, MaxIterationsError, PermissionDeniedError } from './types.js';
 
@@ -27,14 +28,17 @@ export class Agent {
   readonly responseFormat?: ModelRequest['responseFormat'];
   readonly metadata?: Record<string, unknown>;
   readonly events: EventBus;
+  readonly interceptors: AgentInterceptors;
   constructor(config: AgentConfig & { events?: EventBus }) {
     this.name = config.name; this.model = config.model; this.instructions = config.instructions;
     this.tools = config.tools ?? []; this.maxIterations = config.maxIterations ?? 8; this.timeoutMs = config.timeoutMs; this.modelRetries = config.modelRetries ?? 1; this.allowedToolPermissions = config.allowedToolPermissions ?? []; this.responseFormat = config.responseFormat; this.metadata = config.metadata; this.events = config.events ?? new EventBus();
+    this.interceptors = config.interceptors ?? {};
   }
 
   async run(input: string, options: AgentRunOptions = {}): Promise<AgentResult> {
     const runId = createRunId('run'); const started = Date.now(); const maxIterations = options.maxIterations ?? this.maxIterations;
     const controller = new AbortController(); const signal = options.signal ?? controller.signal;
+    input = await foldWaterfall(this.interceptors.preStep?.map((listener) => async (value: string) => listener({ input: value, runId })), input);
     const messages: Message[] = []; if (this.instructions) messages.push({ role: 'system', content: this.instructions }); messages.push({ role: 'user', content: input });
     let usage = emptyUsage(); let iterations = 0; const toolCalls: ToolExecutionResult[] = [];
     await this.emit({ type: 'agent.started', runId, data: { agent: this.name, input } });
@@ -42,11 +46,12 @@ export class Agent {
       while (iterations < maxIterations) {
         if (signal.aborted) throw new CancellationError(); iterations += 1;
         await this.emit({ type: 'model.requested', runId, data: { iteration: iterations, model: this.model.model, provider: this.model.provider } });
-        const request: ModelRequest = { messages, model: this.model.model, tools: this.tools.map((tool) => ({ name: tool.name, description: tool.description, parameters: schemaToJson(tool.inputSchema) })), signal, metadata: options.metadata, responseFormat: options.responseFormat ?? this.responseFormat };
+        let request: ModelRequest = { messages, model: this.model.model, tools: this.tools.map((tool) => ({ name: tool.name, description: tool.description, parameters: schemaToJson(tool.inputSchema) })), signal, metadata: options.metadata, responseFormat: options.responseFormat ?? this.responseFormat };
+        request = await foldWaterfall(this.interceptors.preRequest, request);
         const response = await this.generateWithRetries(request, options.timeoutMs ?? this.timeoutMs, signal, runId, iterations);
         usage = addUsage(usage, response.usage); await this.emit({ type: 'model.completed', runId, data: { iteration: iterations, finishReason: response.finishReason, usage: response.usage ?? {} } });
         const assistant: Message = { role: 'assistant', content: response.content, toolCalls: response.toolCalls }; messages.push(assistant);
-        if (!response.toolCalls?.length) { validateOutput(response.content, request.responseFormat); const result: AgentResult = { runId, output: response.content, messages, iterations, usage, toolCalls, durationMs: Date.now() - started }; await this.emit({ type: 'agent.completed', runId, data: { output: response.content, iterations, usage, durationMs: result.durationMs } }); return result; }
+        if (!response.toolCalls?.length) { validateOutput(response.content, request.responseFormat); const output = await foldSerial(this.interceptors.turnStopping, { output: response.content, iterations }); const result: AgentResult = { runId, output, messages, iterations, usage, toolCalls, durationMs: Date.now() - started }; await this.emit({ type: 'agent.completed', runId, data: { output: result.output, iterations, usage, durationMs: result.durationMs } }); return result; }
         for (const call of response.toolCalls) {
           const execution = await this.executeTool(call, runId, signal, options, toolCalls); toolCalls.push(execution);
           messages.push({ role: 'tool', content: execution.error ? `Error: ${execution.error.message}` : JSON.stringify(execution.output), name: call.name, toolCallId: call.id });
@@ -88,14 +93,24 @@ export class Agent {
     const tool = this.tools.find((candidate) => candidate.name === call.name); const started = Date.now();
     if (!tool) { const error = new AgentForgeError(`Unknown tool: ${call.name}`, 'UNKNOWN_TOOL'); return { id: call.id, name: call.name, input: call.arguments, error, durationMs: 0, attempts: 0 }; }
     await this.emit({ type: 'tool.started', runId, data: { tool: tool.name, callId: call.id, input: call.arguments } });
+    const denial = await firstDenial(this.interceptors.preTool, call);
+    if (denial !== undefined) {
+      const error = new AgentForgeError(`Tool ${tool.name} denied by interceptor: ${denial}`, 'INTERCEPTOR_DENY');
+      await this.emit({ type: 'tool.failed', runId, data: { tool: tool.name, error: error.message, attempts: 0 } });
+      return { id: call.id, name: call.name, input: call.arguments, error, durationMs: Date.now() - started, attempts: 0 };
+    }
     const allowed = new Set(options.allowedToolPermissions ?? this.allowedToolPermissions); const missing = (tool.permissions ?? []).filter((permission) => !allowed.has(permission));
     if (missing.length) { const error = new PermissionDeniedError(tool.name, missing); await this.emit({ type: 'tool.failed', runId, data: { tool: tool.name, error: error.message, permissions: missing, attempts: 0 } }); return { id: call.id, name: call.name, input: call.arguments, error, durationMs: Date.now() - started, attempts: 0 }; }
     let attempts = 0; const retries = tool.retries ?? 0; let lastError: unknown;
     while (attempts <= retries) { attempts += 1; try {
       const parsed = tool.inputSchema.parse(call.arguments); const output = await withTimeout(tool.execute(parsed, { runId, signal, metadata: options.metadata }), tool.timeoutMs ?? options.timeoutMs, signal);
-      const result = { id: call.id, name: call.name, input: parsed, output, durationMs: Date.now() - started, attempts }; await this.emit({ type: 'tool.completed', runId, data: { tool: call.name, durationMs: result.durationMs, attempts } }); return result;
+      const result = { id: call.id, name: call.name, input: parsed, output, durationMs: Date.now() - started, attempts }; await this.emit({ type: 'tool.completed', runId, data: { tool: call.name, durationMs: result.durationMs, attempts } });
+      for (const listener of this.interceptors.postTool ?? []) await listener(result);
+      return result;
     } catch (error) { lastError = error; if (attempts > retries) break; } }
-    const error = lastError instanceof Error ? lastError : new Error(String(lastError)); const result = { id: call.id, name: call.name, input: call.arguments, error, durationMs: Date.now() - started, attempts }; await this.emit({ type: 'tool.failed', runId, data: { tool: call.name, error: error.message, attempts } }); return result;
+    const error = lastError instanceof Error ? lastError : new Error(String(lastError)); const result = { id: call.id, name: call.name, input: call.arguments, error, durationMs: Date.now() - started, attempts }; await this.emit({ type: 'tool.failed', runId, data: { tool: call.name, error: error.message, attempts } });
+    for (const listener of this.interceptors.postTool ?? []) await listener(result);
+    return result;
   }
   private async emit(event: Omit<AgentEvent, 'timestamp'>): Promise<void> { await this.events.emit({ ...event, timestamp: new Date().toISOString() }); }
 }

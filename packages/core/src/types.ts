@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { AgentInterceptors } from './interceptors.js';
 
 export type Role = 'system' | 'user' | 'assistant' | 'tool';
 
@@ -64,6 +65,15 @@ export interface ModelProvider {
   stream?(request: ModelRequest): AsyncIterable<ModelChunk>;
 }
 
+export interface AgentRunOptions {
+  signal?: AbortSignal;
+  maxIterations?: number;
+  timeoutMs?: number;
+  allowedToolPermissions?: string[];
+  responseFormat?: ModelRequest['responseFormat'];
+  metadata?: Record<string, unknown>;
+}
+
 export interface AgentConfig {
   name: string;
   model: ModelProvider;
@@ -75,6 +85,8 @@ export interface AgentConfig {
   allowedToolPermissions?: string[];
   responseFormat?: ModelRequest['responseFormat'];
   metadata?: Record<string, unknown>;
+  /** Waterfall interceptors (Phase N): reflection, compression, guards, observability. */
+  interceptors?: AgentInterceptors;
 }
 
 export interface AgentRunOptions {
