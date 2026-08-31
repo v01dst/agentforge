@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
-import { access, readFile } from 'node:fs/promises';
+import { access, readFile, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -14,9 +14,10 @@ import { buildTurnRunner, resolveRunnable } from './ui/turn.js';
 import { loadProjectPlugins } from './plugins/plugins.js';
 import { buildModelReport, createSessionFromModule, drainStream, formatTurnFooter, isCancelLike } from './session.js';
 import { addProviderEntry, readProviderEntries, removeProviderEntry, type ProviderEntry } from './providers-store.js';
+import { addPermissionRule, readPermissionRules, removePermissionRule } from './permissions-store.js';
 import type { AgentForgeConfig, ChatSession, NamedEntry, ParsedCli, RunnableModule } from './types.js';
 
-export const VERSION = '0.0.1';
+export const VERSION = '0.0.2';
 
 export const HELP = `AgentForge ${VERSION}
 
@@ -29,18 +30,25 @@ Commands:
   run <entry>        Execute an agent or workflow entrypoint once (headless)
   chat [entry]       Interactive agent session (default when a project is configured; --plain to skip the TTY UI)
   models list        List model providers, credentials, and defaults
+  models test <p>    Send a one-shot prompt to a provider/endpoint and report latency
   providers [sub]    List endpoints, or manage custom/proxy endpoints:
                        add <name> --protocol <p> --base-url <url> --model <id> --api-key-env <VAR>
                        remove <name>
                      Protocols: openai | anthropic | google | gemini | openai-compatible
   test [patterns]    Run deterministic project tests
-  inspect <run-id>   Inspect a persisted run
+  inspect <run-id>   Inspect a persisted run (or a stored session with --session)
   tools              List configured tools
-  workflows          List configured workflows
+  workflows [sub]    List configured workflows, or validate one:
+                       validate <file.json>
   plugins [sub]      List plugins, or manage registrations:
                        add <path> | remove <path>
   sessions [sub]     List stored conversations, or:
-                       resume <id> | delete <id>
+                       resume <id> | rename <id> <title> | export <id> [--format md|json] [--out <path>]
+                       prune --older-than-days <n> | --keep <n> [--dry-run] | delete <id>
+  permissions [sub]  List per-tool permission rules, or manage them:
+                       allow <tool> | deny <tool> | remove <tool>
+                      Rules live in .agentforge/permissions.json; deny blocks
+                      a tool in every mode, allow skips its approval prompt.
   mcp [sub]          List MCP servers, or manage them:
                        add <name> [--cwd <dir>] -- <command> [args...]
                        remove <name> | tools [server]
@@ -368,6 +376,77 @@ export async function modelsCommand(flags: Record<string, string | boolean>): Pr
 
 const PROVIDER_PROTOCOLS = ['openai', 'anthropic', 'google', 'gemini', 'openai-compatible'] as const;
 
+/**
+ * One-shot provider connectivity check: resolve the provider (builtin or
+ * managed endpoint), send a minimal prompt, and report latency/usage — or a
+ * precise failure (missing credential variable, HTTP status, retryability).
+ */
+export interface ModelProbeReport {
+  provider: string;
+  model?: string;
+  ok: boolean;
+  durationMs: number;
+  usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
+  finishReason?: string;
+  preview: string;
+}
+
+/** Pure probe used by `agentforge models test` (kept testable without stdout capture). */
+export async function modelProbe(name: string, flags: Record<string, string | boolean>): Promise<ModelProbeReport> {
+  const { createModel, createConfiguredModel, ModelHttpError } = await import('@agentforge-oss/models');
+  const { readProviderEntries } = await import('./providers-store.js');
+  const managed = (await readProviderEntries()).find((entry) => entry.name === name);
+  let model: { generate(request: { messages: Array<{ role: string; content: string }> }): Promise<{ content?: string; finishReason?: string; usage?: { totalTokens?: number }; model?: string }> };
+  if (managed) {
+    if (managed.apiKeyEnv && !process.env[managed.apiKeyEnv]) {
+      throw new Error(`Managed endpoint '${name}' needs its credential: export ${managed.apiKeyEnv} first.`);
+    }
+    model = createConfiguredModel({ name: managed.name, protocol: managed.protocol, model: flagString(flags, 'model') ?? managed.model, baseUrl: managed.baseUrl, apiKeyEnv: managed.apiKeyEnv }) as never;
+  } else if (['mock', 'openai', 'anthropic', 'google', 'gemini'].includes(name)) {
+    try {
+      model = createModel({ provider: name as 'mock' | 'openai' | 'anthropic' | 'google', model: flagString(flags, 'model') }) as never;
+    } catch (error) {
+      throw new Error(`${(error as Error).message} (or add a managed endpoint: agentforge providers add <name> ...)`);
+    }
+  } else {
+    throw new Error(`Unknown provider '${name}'. Known builtins: mock, openai, anthropic, google. Managed endpoints: agentforge providers list.`);
+  }
+  const prompt = flagString(flags, 'prompt') ?? 'Reply with the single word: ok';
+  const started = Date.now();
+  try {
+    const response = await model.generate({ messages: [{ role: 'user', content: prompt }] });
+    const durationMs = Date.now() - started;
+    return {
+      provider: name,
+      model: response.model ?? flagString(flags, 'model') ?? managed?.model,
+      ok: true,
+      durationMs,
+      usage: response.usage,
+      finishReason: response.finishReason ?? 'stop',
+      preview: (response.content ?? '').slice(0, 80).replace(/\s+/g, ' '),
+    };
+  } catch (error) {
+    if (error instanceof ModelHttpError) {
+      const retryHint = error.retryable ? ` (retryable${error.retryAfterMs !== undefined ? `, retry-after ${error.retryAfterMs}ms` : ''})` : ' (not retryable)';
+      throw new Error(`${name} request failed with HTTP ${error.status}${retryHint}: ${error.message.replace(/^Model provider request failed \(\d+\): /, '')}`);
+    }
+    throw error;
+  }
+}
+
+export async function modelsTestCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
+  const name = args[0];
+  if (!name) throw new Error('Usage: agentforge models test <provider> [--model <id>] [--prompt <text>].');
+  const report = await modelProbe(name, flags);
+  if (flagBoolean(flags, 'json')) {
+    printJson(report);
+    return 0;
+  }
+  success(`${report.provider} responded in ${report.durationMs}ms${report.usage?.totalTokens ? ` · ${report.usage.totalTokens} tokens` : ''}`);
+  hint(`  reply: ${report.preview || '(empty)'}`);
+  return 0;
+}
+
 export async function providersCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
   const [sub, name] = args;
   if (!sub || sub === 'list' || sub === 'ls') {
@@ -408,6 +487,32 @@ export async function providersCommand(args: string[], flags: Record<string, str
     return 1;
   }
   throw new Error(`Unknown providers subcommand: ${sub}. Usage: agentforge providers [list|add|remove].`);
+}
+
+/**
+ * Validate a workflow document file (.json) with precise structural errors.
+ * Structural-only: handler availability is checked when a handlers registry
+ * ships with the document environment, which the CLI does not have.
+ */
+export async function workflowsValidateCommand(path: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
+  if (!path) throw new Error('Usage: agentforge workflows validate <file.json>.');
+  const { readFileSync } = await import('node:fs');
+  const { validateWorkflowDocument } = await import('@agentforge-oss/workflows');
+  const absolute = isAbsolute(path) ? path : resolve(process.cwd(), path);
+  let text: string;
+  try { text = readFileSync(absolute, 'utf8'); } catch { throw new Error(`Workflow document not found: ${absolute}`); }
+  let parsed: unknown;
+  try { parsed = JSON.parse(text); } catch (error) { throw new Error(`Workflow document is not valid JSON: ${(error as Error).message}`); }
+  const result = validateWorkflowDocument(parsed);
+  if (flagBoolean(flags, 'json')) { printJson({ path: absolute, ...result }); return result.ok ? 0 : 1; }
+  if (result.ok) {
+    success(`✓ Workflow document ${path} is valid${result.warnings.length ? ` with ${result.warnings.length} warning(s)` : ''}.`);
+    for (const warning of result.warnings) warn(`! ${warning}`);
+    return 0;
+  }
+  for (const failure of result.errors) error(`✗ ${failure}`);
+  for (const warning of result.warnings) warn(`! ${warning}`);
+  return 1;
 }
 
 async function findLocalRepoRoot(start = process.cwd()): Promise<string | undefined> {
@@ -628,15 +733,15 @@ export async function mcpCommand(args: string[], flags: Record<string, string | 
 }
 
 export async function sessionsCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
-  const [sub, id] = args;
-  const { listSessions, loadSession, deleteSession } = await import('./sessions/store.js');
+  const [sub, id, ...rest] = args;
+  const { listSessions, loadSession, deleteSession, renameSession, pruneSessions, locateSession } = await import('./sessions/store.js');
   if (!sub || sub === 'list' || sub === 'ls') {
     const all = await listSessions();
     if (flagBoolean(flags, 'json')) { printJson({ sessions: all }); return 0; }
     heading('AgentForge sessions');
     if (!all.length) { hint('No stored sessions yet. They are created automatically as you chat.'); return 0; }
     for (const entry of all.slice(0, 12)) info(`  ${entry.id}  ${String(entry.messages).padStart(3)} msgs  ${entry.title}`);
-    hint(`resume with: agentforge sessions resume <id>`);
+    hint(`resume with: agentforge sessions resume <id> · rename <id> <title> · export <id> · prune --older-than-days <n> | --keep <n>`);
     return 0;
   }
   if (sub === 'delete' || sub === 'rm') {
@@ -644,6 +749,48 @@ export async function sessionsCommand(args: string[], flags: Record<string, stri
     const removed = await deleteSession(id);
     (removed ? success : warn)(removed ? `Deleted session ${id}` : `Unknown session: ${id}`);
     return removed ? 0 : 1;
+  }
+  if (sub === 'rename') {
+    if (!id || !rest.length) throw new Error('Usage: agentforge sessions rename <id> <new title>.');
+    if (await renameSession(id, rest.join(' '))) { success(`Renamed session ${id}.`); return 0; }
+    warn(`Unknown session: ${id}`);
+    return 1;
+  }
+  if (sub === 'export') {
+    if (!id) throw new Error('Usage: agentforge sessions export <id> [--out <path>].');
+    const found = await locateSession(id);
+    if (!found) throw new Error(`Unknown session: ${id}`);
+    const format = flagString(flags, 'format') ?? 'md';
+    const target = flagString(flags, 'out') ?? join(process.cwd(), `${id}.${format === 'json' ? 'json' : 'md'}`);
+    const body = format === 'json'
+      ? JSON.stringify(found.session, null, 2)
+      : [
+          `# ${found.session.title}`,
+          '',
+          `- id: ${found.session.id}`,
+          `- created: ${found.session.createdAt}`,
+          `- updated: ${found.session.updatedAt}`,
+          `- provider/model: ${found.session.provider ?? '?'}/${found.session.model ?? '?'}`,
+          '',
+          ...found.session.messages.map((message) => `## ${message.role}\n\n${message.text}\n`),
+        ].join('\n');
+    await writeFile(target, body, 'utf8');
+    success(`Exported session ${id} to ${target}`);
+    return 0;
+  }
+  if (sub === 'prune') {
+    const olderThanDays = flagString(flags, 'older-than-days');
+    const keep = flagString(flags, 'keep');
+    if (!olderThanDays && !keep) throw new Error('Usage: agentforge sessions prune --older-than-days <n> and/or --keep <n> [--dry-run].');
+    const removed = await pruneSessions({
+      olderThanDays: olderThanDays !== undefined ? Number(olderThanDays) : undefined,
+      keep: keep !== undefined ? Number(keep) : undefined,
+      dryRun: flagBoolean(flags, 'dry-run'),
+    });
+    if (flagBoolean(flags, 'json')) { printJson({ removed }); return 0; }
+    if (!removed.length) { success('Nothing to prune.'); return 0; }
+    for (const removedId of removed) (flagBoolean(flags, 'dry-run') ? info : success)(`  ${flagBoolean(flags, 'dry-run') ? 'would remove' : 'removed'} ${removedId}`);
+    return 0;
   }
   if (sub === 'resume') {
     const stored = await loadSession(id ?? '');
@@ -654,7 +801,37 @@ export async function sessionsCommand(args: string[], flags: Record<string, stri
     });
     return launched ? 0 : 1;
   }
-  throw new Error(`Unknown sessions subcommand: ${sub}. Usage: agentforge sessions [list|resume|delete].`);
+  throw new Error(`Unknown sessions subcommand: ${sub}. Usage: agentforge sessions [list|resume|rename|export|prune|delete].`);
+}
+
+export async function permissionsCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
+  const [sub, tool] = args;
+  if (!sub || sub === 'list' || sub === 'ls') {
+    const rules = await readPermissionRules();
+    if (flagBoolean(flags, 'json')) { printJson({ rules }); return 0; }
+    heading('Permission rules (.agentforge/permissions.json)');
+    if (!rules.length) {
+      hint('No per-tool rules yet.');
+      hint('Add one with: agentforge permissions allow <tool> | deny <tool>');
+      return 0;
+    }
+    for (const rule of rules) info(`  ${rule.action.padEnd(6)} ${rule.tool}`);
+    hint('deny blocks a tool in every mode; allow skips its approval prompt. Workspace path checks always apply.');
+    return 0;
+  }
+  if (sub === 'allow' || sub === 'deny') {
+    if (!tool) throw new Error(`Usage: agentforge permissions ${sub} <tool>.`);
+    const result = await addPermissionRule(tool, sub, { force: flagBoolean(flags, 'force') });
+    success(`${result.replaced ? 'Replaced' : 'Added'} rule: ${sub} ${tool} in .agentforge/permissions.json`);
+    return 0;
+  }
+  if (sub === 'remove' || sub === 'rm') {
+    if (!tool) throw new Error('Usage: agentforge permissions remove <tool>.');
+    if (await removePermissionRule(tool)) { success(`Removed rule for '${tool}' from .agentforge/permissions.json.`); return 0; }
+    warn(`No rule for '${tool}' was found in .agentforge/permissions.json.`);
+    return 1;
+  }
+  throw new Error(`Unknown permissions subcommand: ${sub}. Usage: agentforge permissions [list|allow|deny|remove].`);
 }
 
 export async function connectCommand(provider: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
@@ -681,14 +858,41 @@ export async function connectCommand(provider: string | undefined, flags: Record
 }
 
 export async function inspectCommand(runId: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
-  if (!runId) throw new Error('Missing run ID. Usage: agentforge inspect <run-id>.');
+  if (!runId) throw new Error('Missing run ID. Usage: agentforge inspect <run-id> [--session].');
   const { config } = await loadConfig();
+
+  // Session inspection: --session, or a bare id shaped like run_/s- session ids.
+  const looksLikeSession = flagBoolean(flags, 'session') || /^s-[0-9a-z]+-[0-9a-f]{6}$/.test(runId);
+  if (looksLikeSession) {
+    const { loadSession } = await import('./sessions/store.js');
+    const stored = await loadSession(runId);
+    if (!stored) {
+      if (flagBoolean(flags, 'session')) throw new Error(`Session ${runId} was not found.`);
+    } else {
+      const result = {
+        session: { id: stored.id, title: stored.title, createdAt: stored.createdAt, updatedAt: stored.updatedAt, provider: stored.provider, model: stored.model, version: stored.version ?? 1, summary: stored.summary },
+        messages: stored.messages,
+      };
+      if (flagBoolean(flags, 'json')) printJson(result);
+      else {
+        heading(`Session ${stored.id} — ${stored.title}`);
+        hint(`${stored.messages.length} message(s) · provider ${stored.provider ?? '?'} · model ${stored.model ?? '?'} · updated ${stored.updatedAt}`);
+        info('');
+        for (const message of stored.messages.slice(-30)) {
+          info(`  ${message.role.padEnd(9)} ${message.text.length > 160 ? `${message.text.slice(0, 160)}…` : message.text.replace(/\n/g, ' ')}`);
+        }
+        if (stored.summary) hint('\n[compacted] earlier turns are summarized in the stored session.');
+      }
+      return 0;
+    }
+  }
+
   let result: unknown;
   if (config.inspectRun) result = await config.inspectRun(runId);
   else if (config.storage?.getRun) result = await config.storage.getRun(runId);
   else {
     const path = join(process.cwd(), '.agentforge', 'runs', `${runId}.json`);
-    try { result = JSON.parse(await readFile(path, 'utf8')); } catch { throw new Error(`Run ${runId} was not found and no storage adapter is configured.`); }
+    try { result = JSON.parse(await readFile(path, 'utf8')); } catch { throw new Error(`Run ${runId} was not found and no storage adapter is configured (sessions can be inspected with --session).`); }
   }
   if (result === undefined || result === null) throw new Error(`Run ${runId} was not found.`);
   if (flagBoolean(flags, 'json')) printJson(result); else printJson(result);

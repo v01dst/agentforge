@@ -1,5 +1,6 @@
 import type { ChatSession, NamedEntry, RunnableModule, SessionTurn, StreamChunk, SessionUsage } from './types.js';
 import { resolveRunnable, resultText } from './ui/turn.js';
+import { COMPACT_KEEP_RECENT, COMPACT_THRESHOLD_MESSAGES } from './sessions/store.js';
 
 export { resolveRunnable };
 
@@ -26,14 +27,29 @@ function coerceUsage(value: unknown): SessionUsage | undefined {
 /**
  * Wrap a one-shot runnable as a session by replaying the transcript as a
  * single prompt. Context continuity is best-effort and model-dependent.
+ * Long transcripts are compacted: older turns roll into a bounded summary
+ * block so prompts stay bounded across extended sessions.
  */
 export function transcriptSession(run: (input: string, options?: Record<string, unknown>) => Promise<unknown>): ChatSession {
   const transcript: string[] = [];
+  let carriedSummary: string | undefined;
+  const compact = (): string[] => {
+    if (transcript.length <= COMPACT_THRESHOLD_MESSAGES) return transcript;
+    const older = transcript.slice(0, transcript.length - COMPACT_KEEP_RECENT);
+    const summaryLines = older.slice(-40).map((line) => (line.length > 120 ? `${line.slice(0, 120)}…` : line));
+    carriedSummary = [carriedSummary, '[earlier conversation]', ...summaryLines].filter(Boolean).join('\n');
+    return transcript.slice(transcript.length - COMPACT_KEEP_RECENT);
+  };
   return {
     async send(input: string, options?: { signal?: AbortSignal }): Promise<SessionTurn> {
       transcript.push(`User: ${input}`);
       const started = Date.now();
-      const result = (await run(`${transcript.join('\n')}\nAssistant:`, options)) as { output?: unknown; runId?: unknown; usage?: unknown; durationMs?: unknown; provider?: unknown; model?: unknown } | null;
+      const prompt = [
+        ...(carriedSummary ? [carriedSummary, ''] : []),
+        ...compact(),
+        'Assistant:',
+      ].join('\n');
+      const result = (await run(prompt, options)) as { output?: unknown; runId?: unknown; usage?: unknown; durationMs?: unknown; provider?: unknown; model?: unknown } | null;
       const record = result && typeof result === 'object' ? result : {};
       const text = record.output !== undefined ? resultText({ output: record.output }) : '';
       transcript.push(`Assistant: ${text}`);

@@ -1,4 +1,5 @@
 import { relative, resolve, isAbsolute } from 'node:path';
+import { evaluateRules, type PermissionRule } from './permissions-store.js';
 
 /** Structural view of a core ToolLike; the CLI intentionally does not depend on @agentforge-oss/core. */
 interface PolicyTool {
@@ -63,6 +64,12 @@ export interface WorkspacePolicyOptions {
   mode: PermissionMode;
   /** Prompt shown to the user when a tool needs approval (ask flows). */
   requestApproval?: (request: ApprovalRequest) => Promise<ApprovalDecision>;
+  /**
+   * Project-level per-tool allow/deny rules (from .agentforge/permissions.json).
+   * Deny blocks a tool in every mode; allow skips the approval prompt but
+   * never bypasses workspace path checks.
+   */
+  rules?: readonly PermissionRule[];
 }
 
 function withinRoot(root: string, candidate?: string): boolean {
@@ -92,10 +99,21 @@ export function applyWorkspacePolicy(tool: PolicyTool, options: WorkspacePolicyO
     timeoutMs: tool.timeoutMs,
     retries: tool.retries,
     async execute(input, context) {
+      // Per-tool rules take precedence over mode defaults, before anything runs.
+      const ruleVerdict = evaluateRules(options.rules ?? [], tool.name);
+      if (ruleVerdict === 'deny') {
+        throw new Error(`Tool ${tool.name} is blocked by a project permission rule (.agentforge/permissions.json).`);
+      }
+
       // Workspace boundary checks for well-known path-bearing inputs.
       const candidate = input as { path?: string };
       if (typeof candidate?.path === 'string' && !withinRoot(root, candidate.path)) {
         throw new Error(`Path escapes the workspace root (${root}); refusing ${tool.name}.`);
+      }
+
+      if (ruleVerdict === 'allow') {
+        // Explicit allow: no approval prompt, but path checks above still apply.
+        return tool.execute(input, context);
       }
 
       if (!missing.length || options.mode === 'read-only') {

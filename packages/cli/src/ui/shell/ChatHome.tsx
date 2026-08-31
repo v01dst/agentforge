@@ -6,7 +6,7 @@ import type { ChatMessage } from '../useTurn.js';
 import type { TurnRunner } from '../turn.js';
 import { ActivityIndicator } from './Activity.js';
 import { colors } from './theme.js';
-import { listSessions, loadSession, newSessionId, saveSession } from '../../sessions/store.js';
+import { listSessions, loadSession, newSessionId, renameSession, saveSession, SESSION_SCHEMA_VERSION, compactTranscript } from '../../sessions/store.js';
 import { validateProviderConnection } from '../../global-config.js';
 import type { GlobalProviderEntry } from '../../global-config.js';
 
@@ -88,6 +88,12 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
   const { messages, streamingText, running, status, lastError, toolEvents, send, cancel, clear, pushSystem, hydrate } = useTurn(runner);
   const sessionIdRef = useRef(newSessionId());
   const restoredRef = useRef(false);
+  /** Custom title set via /rename; autosave preserves it instead of re-deriving. */
+  const titleRef = useRef<string | null>(null);
+  /** Rolling summary of turns removed by compaction; survives resumes. */
+  const summaryRef = useRef<string | undefined>(undefined);
+  /** Original creation timestamp; autosave must not rewrite history. */
+  const createdAtRef = useRef<string | null>(null);
   const [input, setInput] = useState(initialInput ?? '');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -115,21 +121,31 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
       const stored = await loadSession(latest.id);
       if (!stored?.messages.length) return;
       sessionIdRef.current = stored.id;
+      titleRef.current = stored.title ?? null;
+      createdAtRef.current = stored.createdAt ?? null;
+      summaryRef.current = stored.summary;
       hydrate(stored.messages);
-      pushSystem(`resumed session ${stored.id} — ${stored.messages.length} message(s). /new starts fresh.`);
+      pushSystem(`resumed session ${stored.id} — ${stored.messages.length} message(s)${stored.summary ? ' (older turns compacted)' : ''}. /new starts fresh.`);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Autosave whenever the transcript changes while idle.
+  // Autosave whenever the transcript changes while idle. Long transcripts are
+  // compacted on disk (recent tail + rolling summary); the live view is intact.
   useEffect(() => {
     if (running || messages.length === 0) return;
+    if (!createdAtRef.current) createdAtRef.current = new Date().toISOString();
+    const compaction = compactTranscript(messages);
+    if (compaction.summary) summaryRef.current = [summaryRef.current, compaction.summary].filter(Boolean).join('\n\n');
+    const derivedTitle = messages.find((entry) => entry.role === 'user')?.text.slice(0, 48) ?? 'session';
     void saveSession({
       id: sessionIdRef.current,
-      title: messages.find((entry) => entry.role === 'user')?.text.slice(0, 48) ?? 'session',
-      createdAt: new Date().toISOString(),
+      title: titleRef.current ?? derivedTitle,
+      createdAt: createdAtRef.current,
       updatedAt: new Date().toISOString(),
-      messages,
+      messages: compaction.messages,
+      summary: summaryRef.current,
+      version: SESSION_SCHEMA_VERSION,
       provider,
       model,
     }).catch(() => {});
@@ -185,7 +201,7 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
     }
   };
 
-  const submit = () => {
+  const submit = async () => {
     const raw = input.trim();
     setInput('');
     setSelectedIndex(0);
@@ -210,7 +226,37 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
     if (command.name === 'new') {
       clear();
       sessionIdRef.current = newSessionId();
+      titleRef.current = null;
+      createdAtRef.current = null;
+      summaryRef.current = undefined;
       pushSystem('new session started');
+      return;
+    }
+    if (command.name === 'rename') {
+      const title = command.args.join(' ').trim();
+      if (!title) { pushSystem('usage: /rename <new title>'); return; }
+      const renamed = await renameSession(sessionIdRef.current, title);
+      if (renamed) {
+        titleRef.current = title.slice(0, 120);
+        pushSystem(`session renamed to: ${titleRef.current}`);
+      } else {
+        pushSystem('rename will apply with the next autosave');
+        titleRef.current = title.slice(0, 120);
+      }
+      return;
+    }
+    if (command.name === 'show') {
+      void (async () => {
+        const id = command.args[0] ?? sessionIdRef.current;
+        const stored = await loadSession(id);
+        if (!stored) { pushSystem(`unknown session: ${id}`); return; }
+        const recent = stored.messages.slice(-10);
+        pushSystem([
+          `session ${stored.id} — ${stored.title} (${stored.messages.length} msgs)`,
+          ...recent.map((entry) => `  ${entry.role} › ${entry.text.length > 120 ? `${entry.text.slice(0, 120)}…` : entry.text.replace(/\n/g, ' ')}`),
+          stored.summary ? '  [older turns compacted into the stored summary]' : '',
+        ].filter(Boolean).join('\n'));
+      })();
       return;
     }
     if (command.name === 'sessions') {

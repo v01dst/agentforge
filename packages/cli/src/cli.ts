@@ -1,5 +1,5 @@
 import { formatError, error, info } from './output.js';
-import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, mcpCommand, modelsCommand, pluginsAddCommand, pluginsCommand, pluginsRemoveCommand, providersCommand, sessionsCommand, runCommand, testCommand } from './commands.js';
+import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, mcpCommand, modelsCommand, modelsTestCommand, permissionsCommand, pluginsAddCommand, pluginsCommand, pluginsRemoveCommand, providersCommand, sessionsCommand, runCommand, testCommand, workflowsValidateCommand } from './commands.js';
 import type { ParsedCli } from './types.js';
 
 export function parseArgs(argv: string[]): ParsedCli {
@@ -47,14 +47,20 @@ export async function execute(argv: string[] = process.argv.slice(2)): Promise<n
     case 'chat': return await chatCommand(parsed.args[0], parsed.flags);
     case 'models': {
       const sub = parsed.args[0];
-      if (sub && !['list', 'ls', 'l'].includes(sub)) throw new Error(`Unknown models subcommand: ${sub}. Usage: agentforge models list.`);
+      if (sub === 'test') return await modelsTestCommand(parsed.args.slice(1), parsed.flags);
+      if (sub && !['list', 'ls', 'l'].includes(sub)) throw new Error(`Unknown models subcommand: ${sub}. Usage: agentforge models [list|test].`);
       return await modelsCommand(parsed.flags);
     }
     case 'test': return await testCommand(parsed.args);
     case 'inspect': return await inspectCommand(parsed.args[0], parsed.flags);
     case 'providers': return await providersCommand(parsed.args, parsed.flags);
     case 'tools': return await listCommand('tools', parsed.flags);
-    case 'workflows': return await listCommand('workflows', parsed.flags);
+    case 'workflows': {
+      const sub = parsed.args[0];
+      if (sub === 'validate') return await workflowsValidateCommand(parsed.args[1], parsed.flags);
+      if (sub && !['list', 'ls', 'l'].includes(sub)) throw new Error(`Unknown workflows subcommand: ${sub}. Usage: agentforge workflows [list|validate].`);
+      return await listCommand('workflows', parsed.flags);
+    }
     case 'doctor': return await doctorCommand(parsed.flags);
     case 'connect': return await connectCommand(parsed.args[0], parsed.flags);
     case 'plugins': {
@@ -66,6 +72,8 @@ export async function execute(argv: string[] = process.argv.slice(2)): Promise<n
     }
     case 'mcp': return await mcpCommand(parsed.args, parsed.flags);
     case 'sessions': return await sessionsCommand(parsed.args, parsed.flags);
+
+    case 'permissions': return await permissionsCommand(parsed.args, parsed.flags);
     default: throw new Error(`Unknown command: ${parsed.command}. Run agentforge --help.`);
   }
 }

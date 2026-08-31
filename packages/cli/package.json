@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-oss/cli",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Developer CLI for AgentForge projects",
   "license": "Apache-2.0",
   "type": "module",
@@ -30,6 +30,7 @@
   "dependencies": {
     "@agentforge-oss/mcp": "workspace:*",
     "@agentforge-oss/tools": "workspace:*",
+    "@agentforge-oss/workflows": "workspace:*",
     "ink": "^5.2.0",
     "react": "^18.3.1",
     "tsx": "^4.19.2",

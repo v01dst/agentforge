@@ -6,6 +6,7 @@ import { createCodingTools } from './coding-tools.js';
 import type { ApprovalRequest, ApprovalDecision } from './permissions.js';
 import { requestToolApproval } from './approvals.js';
 import { detectDefaultProvider } from './model-runner.js';
+import { readPermissionRulesSync } from './permissions-store.js';
 
 export interface CodingSessionOptions {
   /** Workspace root for repository tools (defaults to cwd). */
@@ -56,7 +57,8 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
 
   const events = new EventBus();
   const approver = options.requestApproval ?? ((request: ApprovalRequest) => requestToolApproval(request));
-  const codingTools: ToolLike[] = createCodingTools({ root, requestApproval: approver }) as unknown as ToolLike[];
+  const permissionRules = readPermissionRulesSync(root);
+  const codingTools: ToolLike[] = createCodingTools({ root, requestApproval: approver, permissionRules }) as unknown as ToolLike[];
 
   const agent = new Agent({
     name: 'agentforge',

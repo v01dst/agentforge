@@ -13,7 +13,13 @@ export interface StoredSession {
   messages: Array<{ role: 'user' | 'assistant' | 'system' | 'tool'; text: string }>;
   provider?: string;
   model?: string;
+  /** Schema version for forward compatibility; older files are treated as 1. */
+  version?: 1;
+  /** Rolling summary of turns removed by compaction (see compactTranscript). */
+  summary?: string;
 }
+
+export const SESSION_SCHEMA_VERSION = 1 as const;
 
 export function sessionsDir(cwd = process.cwd(), global = false): string {
   return global ? join(homedir(), '.agentforge', 'sessions') : join(resolve(cwd), '.agentforge', 'sessions');
@@ -43,6 +49,28 @@ export async function loadSession(id: string, cwd = process.cwd(), global = fals
   } catch {
     return undefined;
   }
+}
+
+/** Locate a session in the project store first, then global; remembers where. */
+export async function locateSession(id: string, cwd = process.cwd()): Promise<{ session: StoredSession; global: boolean } | undefined> {
+  for (const global of [false, true]) {
+    const stored = await loadSession(id, cwd, global);
+    if (stored) return { session: stored, global };
+  }
+  return undefined;
+}
+
+/** Rename a session in whichever store holds it; returns false when unknown. */
+export async function renameSession(id: string, title: string, cwd = process.cwd()): Promise<boolean> {
+  const found = await locateSession(id, cwd);
+  if (!found) return false;
+  const trimmed = title.trim();
+  if (!trimmed) throw new Error('Session title cannot be empty.');
+  found.session.title = trimmed.slice(0, 120);
+  found.session.updatedAt = new Date().toISOString();
+  found.session.version = SESSION_SCHEMA_VERSION;
+  await saveSession(found.session, cwd, found.global);
+  return true;
 }
 
 export interface SessionSummary {
@@ -82,4 +110,79 @@ export async function deleteSession(id: string, cwd = process.cwd(), global = fa
   } catch {
     return false;
   }
+}
+
+/** Delete a session from both stores without caring where it lives. */
+async function deleteEverywhere(id: string, cwd = process.cwd()): Promise<void> {
+  await deleteSession(id, cwd, false);
+  await deleteSession(id, cwd, true);
+}
+
+export interface PruneOptions {
+  cwd?: string;
+  /** Delete sessions not updated within this many days. */
+  olderThanDays?: number;
+  /** After age pruning, keep only the newest N sessions. */
+  keep?: number;
+  /** Report what would be removed without deleting. */
+  dryRun?: boolean;
+}
+
+/**
+ * Retention control: remove sessions by age and/or keep only the newest N.
+ * Ids are removed from both stores. Returns the removed session ids.
+ */
+export async function pruneSessions(options: PruneOptions = {}): Promise<string[]> {
+  const cwd = options.cwd ?? process.cwd();
+  const all = await listSessions(cwd);
+  const cutoff = options.olderThanDays !== undefined
+    ? Date.now() - options.olderThanDays * 24 * 60 * 60 * 1000
+    : undefined;
+  const doomed = new Set<string>();
+  if (cutoff !== undefined) {
+    for (const entry of all) {
+      if (Date.parse(entry.updatedAt) < cutoff) doomed.add(entry.id);
+    }
+  }
+  if (options.keep !== undefined) {
+    const survivors = all.filter((entry) => !doomed.has(entry.id)).slice(options.keep);
+    for (const entry of survivors) doomed.add(entry.id);
+  }
+  if (!options.dryRun) {
+    for (const id of doomed) await deleteEverywhere(id, cwd);
+  }
+  return [...doomed];
+}
+
+export interface TranscriptCompaction {
+  /** Messages to keep (recent tail). */
+  messages: StoredSession['messages'];
+  /** Human-readable summary of the removed older turns, or undefined when nothing was compacted. */
+  summary?: string;
+}
+
+export const COMPACT_THRESHOLD_MESSAGES = 40;
+export const COMPACT_KEEP_RECENT = 20;
+const SUMMARY_ENTRY_LIMIT = 40;
+const SUMMARY_TEXT_LIMIT = 120;
+
+/**
+ * Pure compaction policy: when a transcript grows past
+ * COMPACT_THRESHOLD_MESSAGES, roll everything but the most recent
+ * COMPACT_KEEP_RECENT entries into a bounded summary string.
+ */
+export function compactTranscript(
+  messages: StoredSession['messages'],
+  options: { threshold?: number; keepRecent?: number } = {},
+): TranscriptCompaction {
+  const threshold = options.threshold ?? COMPACT_THRESHOLD_MESSAGES;
+  const keepRecent = options.keepRecent ?? COMPACT_KEEP_RECENT;
+  if (messages.length <= threshold) return { messages };
+  const older = messages.slice(0, messages.length - keepRecent);
+  const summaryEntries = older
+    .filter((entry) => entry.role === 'user' || entry.role === 'assistant')
+    .slice(-SUMMARY_ENTRY_LIMIT)
+    .map((entry) => `${entry.role}: ${entry.text.length > SUMMARY_TEXT_LIMIT ? `${entry.text.slice(0, SUMMARY_TEXT_LIMIT)}…` : entry.text}`);
+  const summary = summaryEntries.length ? `[earlier conversation]\n${summaryEntries.join('\n')}` : undefined;
+  return { messages: messages.slice(messages.length - keepRecent), summary };
 }

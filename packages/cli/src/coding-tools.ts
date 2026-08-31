@@ -17,6 +17,7 @@ import {
   type ApprovalRequest,
   type ApprovalDecision,
 } from './permissions.js';
+import type { PermissionRule } from './permissions-store.js';
 
 /** Structural tool shape accepted by the workspace policy layer. */
 export type PolicyTool = Parameters<typeof applyWorkspacePolicy>[0];
@@ -33,6 +34,8 @@ export interface CodingToolsOptions {
   testCommand?: { command: string; args: string[] };
   /** Approval prompt callback for 'ask' mode. */
   requestApproval?: (request: ApprovalRequest) => Promise<ApprovalDecision>;
+  /** Per-tool allow/deny rules; deny blocks, allow skips prompting. */
+  permissionRules?: readonly PermissionRule[];
 }
 
 /**
@@ -44,7 +47,7 @@ export interface CodingToolsOptions {
 export function createCodingTools(options: CodingToolsOptions = {}): PolicyTool[] {
   const root = options.root ?? process.cwd();
   const allowedCommands = options.allowedCommands ?? [];
-  const policy = { root, mode: currentPermissionMode(), requestApproval: options.requestApproval };
+  const policy = { root, mode: currentPermissionMode(), requestApproval: options.requestApproval, rules: options.permissionRules };
 
   const tools: PolicyTool[] = [
     createListFilesTool({ root }) as unknown as PolicyTool,
