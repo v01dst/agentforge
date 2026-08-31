@@ -2,6 +2,15 @@
 
 All notable changes to AgentForge are documented here.
 
+## [Unreleased]
+
+### Gateway: OpenAI-compatible agent-as-model (Phase J — multi-project plan)
+
+- `agentforge gateway serve [--port 8787] [--host 127.0.0.1] [--provider] [--model]`: a local HTTP server exposing `POST /v1/chat/completions` (OpenAI wire format, clean-room on `node:http`) and `GET /healthz`. Any OpenAI-protocol client can now talk to an AgentForge-backed model.
+- Non-streaming completions return `chat.completion` payloads with usage; streaming requests return `text/event-stream` deltas ending with a `finish_reason` chunk and `data: [DONE]`. Request validation via zod; oversized bodies rejected; honest 400/404/500 error envelopes.
+- The gateway is a seam, not a runtime dependency: `createGatewayServer({ modelInstance })` accepts any injected provider (deterministic in tests — no network). Built instructions are prepended per conversation.
+- Tests: 4 suites exercising real HTTP round-trips (healthz, completions, SSE streaming, error shapes).
+
 ## [0.5.0] — 2026-08-31
 
 Feature wave two (multi-project adoption plan, phases H, I, P, Q, R, T).

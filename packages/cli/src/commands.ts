@@ -1157,3 +1157,34 @@ export async function findingsCommand(args: string[], flags: Record<string, stri
   }
   throw new Error('Usage: agentforge findings [list|clear --older-than-days <n>].');
 }
+
+/** Gateway (Phase J): serve an OpenAI-compatible endpoint over a local agent. */
+export async function gatewayCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
+  const [{ createGatewayServer, listenGateway }, { createModel }] = await Promise.all([
+    import('./gateway/server.js'),
+    import('@agentforge-oss/models'),
+  ]);
+  const [sub] = args;
+  if (sub && sub !== 'serve') throw new Error('Usage: agentforge gateway serve [--port <n>] [--host <addr>] [--model <name>].');
+  const provider = (flagString(flags, 'provider') ?? process.env.AGENTFORGE_PROVIDER ?? 'anthropic') as never;
+  const modelName = flagString(flags, 'model') ?? process.env.AGENTFORGE_MODEL;
+  let modelInstance: unknown;
+  try {
+    modelInstance = createModel({ provider, model: modelName ?? 'claude-3-5-sonnet-latest' });
+  } catch (error) {
+    throw new Error(`Gateway cannot start: ${(error as Error).message}`);
+  }
+  const server = createGatewayServer({
+    modelInstance,
+    model: modelName,
+    buildInstructions: () => 'You are AgentForge, a terminal coding agent. Be concise and factual.',
+  });
+  const port = Number(flagString(flags, 'port') ?? '8787');
+  const host = flagString(flags, 'host') ?? '127.0.0.1';
+  const bound = await listenGateway(server, port, host);
+  success(`AgentForge gateway listening on http://${host}:${bound}/v1/chat/completions`);
+  hint('POST /v1/chat/completions (OpenAI-compatible) · GET /healthz');
+  hint('Ctrl-C to stop.');
+  await new Promise<void>((resolveRun) => process.once('SIGINT', () => { server.close(() => resolveRun()); resolveRun(); }));
+  return 0;
+}
