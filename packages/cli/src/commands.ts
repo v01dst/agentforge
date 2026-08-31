@@ -1241,3 +1241,43 @@ export async function daemonCommand(args: string[], flags: Record<string, string
   }
   throw new Error('Usage: agentforge daemon [run|status|stop|install].');
 }
+
+/** Benchmarks (Phase S): deterministic-only scoring — no model judges. */
+export async function benchmarksCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
+  const { BUILTIN_BENCHMARKS, getBenchmark, runBenchmark, recordBenchmarkResult, readBenchmarkResults, scoreResults } = await import('./benchmarks/benchmarks.js');
+  const [sub, id] = args;
+  if (!sub || sub === 'list' || sub === 'ls') {
+    if (flagBoolean(flags, 'json')) { printJson({ benchmarks: BUILTIN_BENCHMARKS.map((entry) => ({ id: entry.id, description: entry.description })) }); return 0; }
+    heading('Benchmarks (deterministic checkers only — no model judges)');
+    for (const entry of BUILTIN_BENCHMARKS) info(`  ${entry.id.padEnd(16)} ${entry.description}`);
+    hint('Run with: agentforge benchmarks run <id>  (or --all)');
+    return 0;
+  }
+  if (sub === 'run') {
+    const targets = flagBoolean(flags, 'all') ? [...BUILTIN_BENCHMARKS] : id ? [getBenchmark(id) ?? (() => { throw new Error(`Unknown benchmark '${id}'. List with: agentforge benchmarks list`); })()] : (() => { throw new Error('Usage: agentforge benchmarks run <id> [--all].'); })();
+    const provider = (flagString(flags, 'provider') ?? process.env.AGENTFORGE_PROVIDER ?? 'auto');
+    const label = flagString(flags, 'label') ?? `${provider}${process.env.AGENTFORGE_MODEL ? `/${process.env.AGENTFORGE_MODEL}` : ''}`;
+    const { buildAgentRunner } = await import('./coding-session.js');
+    const runner = buildAgentRunner({ observability: false });
+    let passed = 0;
+    for (const benchmark of targets) {
+      const result = await runBenchmark(benchmark, { runner, label });
+      await recordBenchmarkResult(result);
+      (result.passed ? success : warn)(`  ${result.passed ? 'PASS' : 'FAIL'}  ${result.id} (${result.durationMs}ms) — ${result.detail}`);
+      if (result.passed) passed += 1;
+    }
+    info(`Score: ${passed}/${targets.length} passed. Results appended to .agentforge/benchmarks/results.ndjson`);
+    return passed === targets.length ? 0 : 1;
+  }
+  if (sub === 'results') {
+    const results = await readBenchmarkResults();
+    const score = scoreResults(results);
+    if (flagBoolean(flags, 'json')) { printJson({ score, results }); return 0; }
+    heading('Benchmark results (.agentforge/benchmarks/results.ndjson)');
+    if (!results.length) { hint('No results yet.'); return 0; }
+    for (const result of results.slice(-20)) info(`  ${result.ts}  ${result.passed ? 'PASS' : 'FAIL'}  ${result.id}  ${result.detail}`);
+    info(`Latest score: ${score.passed}/${score.total}`);
+    return 0;
+  }
+  throw new Error('Usage: agentforge benchmarks [list|run <id>|results].');
+}

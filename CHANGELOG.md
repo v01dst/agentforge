@@ -4,6 +4,13 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### Benchmarking, deterministic-only (Phase S — multi-project plan)
+
+- Benchmark harness (`packages/cli/src/benchmarks/benchmarks.ts`): cases pair a task prompt with a **deterministic checker** (files on disk, exact content) — doctrine: no model judges output, ever. Each run executes in a fresh sandbox cwd (the session cwd is restored afterwards).
+- Built-in cases: `file-creation` (exact-content file), `file-edit` (targeted replace with collateral check), `restraint` (untouched files must survive). Results append to `.agentforge/benchmarks/results.ndjson` (append-only; latest-per-case scoring).
+- CLI: `agentforge benchmarks list|run <id> [--all]|results [--json]`.
+- Tests: 4 suites (scripted compliant runner passes all cases; do-nothing runner fails actionable cases and passes restraint; append-only persistence + scoring); CLI suite 246 green.
+
 ### Daemon + heartbeat (Phase K — multi-project plan)
 
 - Foreground daemon loop (`agentforge daemon run [--interval-ms 30000]`): writes `.agentforge/daemon/heartbeat.json` every interval (pid, startedAt, lastBeat, beats, job counters), drains JSON job files dropped into `.agentforge/daemon/jobs/` (`{ id, type: "prompt", text }`) through the standard agent runner, writes `<id>.result.json` into `daemon/out/`, and exits gracefully when `daemon/stop` appears. Malformed jobs fail loudly into result files without killing the loop.
