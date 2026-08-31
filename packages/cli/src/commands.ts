@@ -1116,3 +1116,29 @@ export async function runsCommand(args: string[], flags: Record<string, string |
   }
   throw new Error('Usage: agentforge runs [list|show <runId>|prune --older-than-days <n>].');
 }
+
+/** Security findings (Phase R): read the observe-only findings log. */
+export async function findingsCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
+  const { readFindings, summarizeFindings, clearFindings } = await import('./findings/scanner.js');
+  const [sub] = args;
+  if (!sub || sub === 'list' || sub === 'ls') {
+    const limit = Number(flagString(flags, 'limit') ?? '50');
+    const findings = await readFindings(undefined, Number.isFinite(limit) ? limit : 50);
+    if (flagBoolean(flags, 'json')) { printJson({ findings }); return 0; }
+    heading('Security findings (.agentforge/observability/findings.ndjson)');
+    info(`  ${summarizeFindings(findings)}`);
+    for (const finding of findings.slice(-20)) {
+      info(`  [${finding.severity}] ${finding.kind} — ${finding.tool}: ${finding.summary}`);
+      if (finding.detail && !flagBoolean(flags, 'quiet')) hint(`    ${finding.detail.slice(0, 140).replace(/\n/g, ' ')}`);
+    }
+    hint('Findings are observations, not gates. Review them; they never blocked execution.');
+    return 0;
+  }
+  if (sub === 'clear') {
+    const days = Number(flagString(flags, 'older-than-days') ?? '0');
+    const cleared = await clearFindings(Number.isFinite(days) ? days : 0);
+    success(cleared ? `Cleared ${cleared} finding(s).` : 'No findings matched.');
+    return 0;
+  }
+  throw new Error('Usage: agentforge findings [list|clear --older-than-days <n>].');
+}

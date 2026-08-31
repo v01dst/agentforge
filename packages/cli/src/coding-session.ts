@@ -15,6 +15,7 @@ import { createReflectionRuntime, type ReflectionConfig } from './reflection/rev
 import { createCompressionInterceptor } from './context/compression.js';
 import { createDoomLoopGuard } from './guards/doom-loop.js';
 import { ObservabilitySink } from './observability/sink.js';
+import { createFindingsRuntime } from './findings/scanner.js';
 
 export interface CodingSessionOptions {
   /** Workspace root for repository tools (defaults to cwd). */
@@ -77,6 +78,8 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
   if (options.observability !== false) {
     events.addSink(new ObservabilitySink(root));
   }
+  // Phase R: security findings scanner (observe-only, never gates).
+  const findings = createFindingsRuntime({ root });
   const approver = options.requestApproval ?? ((request: ApprovalRequest) => requestToolApproval(request));
   const permissionRules = readPermissionRulesSync(root);
   const codingTools: ToolLike[] = createCodingTools({
@@ -135,9 +138,13 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
       ],
       preTool: [
         createDoomLoopGuard(),
+        ...(findings.interceptors.preTool ?? []),
         ...(options.pluginHooks?.preTool as never[] ?? []),
       ],
-      postTool: options.pluginHooks?.postTool as never,
+      postTool: [
+        ...(findings.interceptors.postTool ?? []),
+        ...(options.pluginHooks?.postTool as never[] ?? []),
+      ],
       turnStopping: [
         ...(reflection?.interceptors.turnStopping ?? []),
         ...(options.pluginHooks?.turnStopping as never[] ?? []),

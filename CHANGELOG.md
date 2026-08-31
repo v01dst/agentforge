@@ -4,6 +4,13 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### Security findings, observe-only (Phase R — multi-project plan)
+
+- Deterministic findings scanner over tool activity (`packages/cli/src/findings/scanner.ts`), wired as `preTool`/`postTool` interceptors in every coding session. Doctrine-compliant: **findings are recorded, never enforced** — `preTool` always returns void, even for secrets.
+- Detectors: secret-shaped tool inputs (AWS keys, private keys, GitHub/Google/Slack tokens — masked in recorded detail), risky shell patterns (`curl|sh`, `rm -rf /`, `chmod 777 /`), credential-file access attempts (`.env` variants, key files, `.ssh/` — `.env.example` exempt, matching the Phase 5 read_file policy), and boundary refusals observed in tool failures.
+- Findings persist to `.agentforge/observability/findings.ndjson` (corrupt-line tolerant); CLI: `agentforge findings list [--json|--limit N]` and `findings clear --older-than-days <n>`.
+- Tests: 9 suites; CLI suite 228 green.
+
 ### Observability core (Phase Q — multi-project plan)
 
 - Local-first structured event log: every coding session writes run events (`agent.started/completed/failed`, `model.requested/completed`, `tool.started/completed/failed`, workflow events) as NDJSON under `.agentforge/observability/runs/<runId>.ndjson`, with a compacted per-run index at `index.ndjson` (status + type counts + timestamps). Doctrine-compliant: pure observation — nothing gates, nothing leaves the machine; disable with `observability: false`.

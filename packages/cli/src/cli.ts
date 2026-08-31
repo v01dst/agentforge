@@ -1,5 +1,5 @@
 import { formatError, error, info } from './output.js';
-import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, mcpCommand, modelsCommand, modelsTestCommand, permissionsCommand, pluginsAddCommand, pluginsCommand, pluginsLifecycleCommand, pluginsRemoveCommand, profileCommand, providersCommand, runsCommand, sessionsCommand, runCommand, skillsCommand, testCommand, workflowsValidateCommand } from './commands.js';
+import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, mcpCommand, modelsCommand, modelsTestCommand, permissionsCommand, pluginsAddCommand, pluginsCommand, pluginsLifecycleCommand, pluginsRemoveCommand, profileCommand, providersCommand, runsCommand, findingsCommand, sessionsCommand, runCommand, skillsCommand, testCommand, workflowsValidateCommand } from './commands.js';
 import type { ParsedCli } from './types.js';
 
 export function parseArgs(argv: string[]): ParsedCli {
@@ -75,6 +75,7 @@ export async function execute(argv: string[] = process.argv.slice(2)): Promise<n
     case 'mcp': return await mcpCommand(parsed.args, parsed.flags);
     case 'sessions': return await sessionsCommand(parsed.args, parsed.flags);
     case 'runs': return await runsCommand(parsed.args, parsed.flags);
+    case 'findings': return await findingsCommand(parsed.args, parsed.flags);
 
     case 'permissions': return await permissionsCommand(parsed.args, parsed.flags);
 
