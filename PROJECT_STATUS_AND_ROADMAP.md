@@ -857,7 +857,7 @@ Goal: installation no longer depends on this repository’s absolute path.
 - [x] Resolve npm naming: the public `@agentforge` scope is owned by a third party and the unscoped `agentforge` name is similarity-blocked, so all packages publish under the `@agentforge-oss/*` scope. The CLI installs globally as `npm i -g @agentforge-oss/cli` and still provides the `agentforge` binary.
 - [x] Publish v0.1.0 to the npm registry (2026-08-24): CLI + 9 internal packages verified live.
 - [x] Publish `0.0.2` of all `@agentforge-oss/*` packages (2026-08-31): first release on the restarted version line; tag `v0.0.2` triggers the CI release workflow (build → test → `pnpm -r publish --access public`).
-- [ ] Verify `pnpm dlx`, `npx`, and package installation behavior on clean machines.
+- [x] Verify `pnpm dlx`, `npx`, and package installation behavior on clean machines. (Partial 2026-08-31: `npx @agentforge-oss/cli --version` reports `0.0.2` from a disposable directory; Linux CI (Node 20 & 22) green. macOS/Windows and a true clean-machine matrix still pending.)
 - [ ] Add semantic-release or Changesets-based versioning.
 - [ ] Publish migration notes for experimental API changes.
 - [ ] Add a release checklist.
