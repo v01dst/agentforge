@@ -4,6 +4,13 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### Daemon + heartbeat (Phase K — multi-project plan)
+
+- Foreground daemon loop (`agentforge daemon run [--interval-ms 30000]`): writes `.agentforge/daemon/heartbeat.json` every interval (pid, startedAt, lastBeat, beats, job counters), drains JSON job files dropped into `.agentforge/daemon/jobs/` (`{ id, type: "prompt", text }`) through the standard agent runner, writes `<id>.result.json` into `daemon/out/`, and exits gracefully when `daemon/stop` appears. Malformed jobs fail loudly into result files without killing the loop.
+- Supervised install without surprise auto-starts: `agentforge daemon install` writes a launchd plist (macOS, `KeepAlive`) or a systemd user unit (Linux, `Restart=on-failure`) and prints the load/enable command — supervision is provided by the OS, not by daemonizing ourselves.
+- `agentforge daemon status` reports alive/stale from the heartbeat freshness window; `daemon stop` writes the stop file.
+- Tests: 6 suites (bounded loops, job drain, failure accounting, freshness, install templates); CLI suite 242 green.
+
 ### Gateway: OpenAI-compatible agent-as-model (Phase J — multi-project plan)
 
 - `agentforge gateway serve [--port 8787] [--host 127.0.0.1] [--provider] [--model]`: a local HTTP server exposing `POST /v1/chat/completions` (OpenAI wire format, clean-room on `node:http`) and `GET /healthz`. Any OpenAI-protocol client can now talk to an AgentForge-backed model.

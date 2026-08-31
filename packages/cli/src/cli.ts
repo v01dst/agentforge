@@ -1,5 +1,5 @@
 import { formatError, error, info } from './output.js';
-import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, mcpCommand, modelsCommand, modelsTestCommand, permissionsCommand, pluginsAddCommand, pluginsCommand, pluginsLifecycleCommand, pluginsRemoveCommand, profileCommand, providersCommand, runsCommand, findingsCommand, gatewayCommand, sessionsCommand, runCommand, skillsCommand, testCommand, workflowsValidateCommand } from './commands.js';
+import { HELP, VERSION, chatCommand, connectCommand, devCommand, doctorCommand, initCommand, inspectCommand, listCommand, mcpCommand, modelsCommand, modelsTestCommand, permissionsCommand, pluginsAddCommand, pluginsCommand, pluginsLifecycleCommand, pluginsRemoveCommand, profileCommand, providersCommand, runsCommand, findingsCommand, gatewayCommand, daemonCommand, sessionsCommand, runCommand, skillsCommand, testCommand, workflowsValidateCommand } from './commands.js';
 import type { ParsedCli } from './types.js';
 
 export function parseArgs(argv: string[]): ParsedCli {
@@ -77,6 +77,7 @@ export async function execute(argv: string[] = process.argv.slice(2)): Promise<n
     case 'runs': return await runsCommand(parsed.args, parsed.flags);
     case 'findings': return await findingsCommand(parsed.args, parsed.flags);
     case 'gateway': return await gatewayCommand(parsed.args, parsed.flags);
+    case 'daemon': return await daemonCommand(parsed.args, parsed.flags);
 
     case 'permissions': return await permissionsCommand(parsed.args, parsed.flags);
 

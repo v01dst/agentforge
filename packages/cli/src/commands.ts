@@ -1188,3 +1188,56 @@ export async function gatewayCommand(args: string[], flags: Record<string, strin
   await new Promise<void>((resolveRun) => process.once('SIGINT', () => { server.close(() => resolveRun()); resolveRun(); }));
   return 0;
 }
+
+/** Daemon (Phase K): foreground heartbeat loop + supervised install. */
+export async function daemonCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
+  const [sub] = args;
+  const { daemonPaths, runDaemon, readHeartbeat, heartbeatIsFresh, launchdPlabel, launchdPlist, systemdUnit } = await import('./daemon/daemon.js');
+  const paths = daemonPaths();
+  if (sub === 'run') {
+    const { buildAgentRunner } = await import('./coding-session.js');
+    const interval = Number(flagString(flags, 'interval-ms') ?? '30000');
+    const runner = buildAgentRunner({});
+    info(`AgentForge daemon starting (interval ${interval}ms) — heartbeat: ${paths.heartbeat}`);
+    info(`Drop job files into ${paths.jobs} (JSON: {"id":"...","type":"prompt","text":"..."})`);
+    const result = await runDaemon({ runner, intervalMs: Number.isFinite(interval) ? interval : 30_000 });
+    success(`daemon stopped after ${result.beats} beats (${result.jobsProcessed} jobs ok, ${result.jobsFailed} failed)`);
+    return 0;
+  }
+  if (sub === 'status') {
+    const heartbeat = await readHeartbeat();
+    if (!heartbeat) { info('daemon: not running (no heartbeat).'); return 0; }
+    const fresh = heartbeatIsFresh(heartbeat);
+    info(`daemon pid ${heartbeat.pid}: ${fresh ? 'alive' : 'STALE'} — beats ${heartbeat.beats}, jobs ${heartbeat.jobsProcessed} ok / ${heartbeat.jobsFailed} failed, last beat ${heartbeat.lastBeat}`);
+    return fresh ? 0 : 1;
+  }
+  if (sub === 'stop') {
+    await (await import('node:fs/promises')).mkdir(paths.root, { recursive: true });
+    await (await import('node:fs/promises')).writeFile(paths.stop, `${new Date().toISOString()}\n`, 'utf8');
+    success(`Stop file written — the daemon will exit on its next beat: ${paths.stop}`);
+    return 0;
+  }
+  if (sub === 'install') {
+    const { homedir, platform } = await import('node:os');
+    const projectName = process.cwd().split('/').pop() ?? 'project';
+    if (platform() === 'darwin') {
+      const label = launchdPlabel(projectName);
+      const plistPath = join(homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
+      const { writeFile: write, mkdir: mkdirs } = await import('node:fs/promises');
+      await mkdirs(join(plistPath, '..'), { recursive: true });
+      await write(plistPath, launchdPlist(label, process.execPath, join(process.cwd(), 'node_modules', '.bin', 'agentforge'), process.cwd()), 'utf8');
+      success(`launchd plist written: ${plistPath}`);
+      hint(`Load it with: launchctl load ${plistPath}  (supervised; restarts on failure)`);
+      return 0;
+    }
+    const unitDir = join(homedir(), '.config', 'systemd', 'user');
+    const unitPath = join(unitDir, `agentforge-${projectName.replace(/[^a-zA-Z0-9.-]/g, '-')}.service`);
+    const { writeFile: write, mkdir: mkdirs } = await import('node:fs/promises');
+    await mkdirs(unitDir, { recursive: true });
+    await write(unitPath, systemdUnit(process.cwd(), join(process.cwd(), 'node_modules', '.bin', 'agentforge')), 'utf8');
+    success(`systemd user unit written: ${unitPath}`);
+    hint(`Enable with: systemctl --user enable --now ${unitPath.split('/').pop()}  (supervised; restarts on failure)`);
+    return 0;
+  }
+  throw new Error('Usage: agentforge daemon [run|status|stop|install].');
+}
