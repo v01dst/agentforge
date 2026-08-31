@@ -119,9 +119,12 @@ export class AnthropicModel implements ModelProvider {
   async generate(request: ModelRequest): Promise<ModelResponse> {
     const apiKey = this.options.apiKey ?? process.env.ANTHROPIC_API_KEY;
     if (!apiKey) throw new Error('ANTHROPIC_API_KEY is required for the Anthropic provider');
+    // Prompt caching (Phase D): the stable system prefix gets a cache
+    // breakpoint so repeat turns read the prefix from the provider cache.
     const system = request.messages.find((message) => message.role === 'system')?.content;
     const messages = request.messages.filter((message) => message.role !== 'system').map((message) => ({ role: message.role === 'tool' ? 'user' : message.role, content: message.content }));
-    const response = await this.fetcher(`${this.options.baseUrl ?? 'https://api.anthropic.com/v1'}/messages`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', ...this.options.headers }, body: JSON.stringify({ model: request.model ?? this.model, max_tokens: request.maxTokens ?? 1024, system, messages, temperature: request.temperature, tools: request.tools?.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })) }), signal: request.signal });
+    const systemBlock = system !== undefined ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] : undefined;
+    const response = await this.fetcher(`${this.options.baseUrl ?? 'https://api.anthropic.com/v1'}/messages`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', ...this.options.headers }, body: JSON.stringify({ model: request.model ?? this.model, max_tokens: request.maxTokens ?? 1024, system: systemBlock, messages, temperature: request.temperature, tools: request.tools?.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })) }), signal: request.signal });
     const body = await parseResponse(response) as { id?: string; content?: Array<{ type: string; text?: string; id?: string; name?: string; input?: unknown }>; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number } };
     const calls = body.content?.filter((item) => item.type === 'tool_use').map((item) => ({ id: item.id ?? id('tool'), name: item.name ?? '', arguments: item.input })) ?? [];
     return { id: body.id ?? id('anthropic'), content: body.content?.filter((item) => item.type === 'text').map((item) => item.text ?? '').join('') ?? '', toolCalls: calls.length ? calls : undefined, finishReason: calls.length ? 'tool_calls' : 'stop', usage: usage(body.usage?.input_tokens, body.usage?.output_tokens), model: this.model, raw: body };
@@ -132,13 +135,14 @@ export class AnthropicModel implements ModelProvider {
     if (!apiKey) throw new Error('ANTHROPIC_API_KEY is required for the Anthropic provider');
     const system = request.messages.find((message) => message.role === 'system')?.content;
     const messages = request.messages.filter((message) => message.role !== 'system').map((message) => ({ role: message.role === 'tool' ? 'user' : message.role, content: message.content }));
+    const systemBlock = system !== undefined ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] : undefined;
     const response = await this.fetcher(`${this.options.baseUrl ?? 'https://api.anthropic.com/v1'}/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'text/event-stream', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', ...this.options.headers },
       body: JSON.stringify({
         model: request.model ?? this.model,
         max_tokens: request.maxTokens ?? 1024,
-        system,
+        system: systemBlock,
         messages,
         temperature: request.temperature,
         stream: true,

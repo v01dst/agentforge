@@ -11,6 +11,7 @@ import { loadMemorySync, loadPersonaSourcesSync, renderPersonaBlock } from './me
 import { listSkillsSync, renderSkillIndex } from './skills/skills.js';
 import type { AgentForgePlugin } from './plugins/plugins.js';
 import { createReflectionRuntime, type ReflectionConfig } from './reflection/review.js';
+import { createCompressionInterceptor } from './context/compression.js';
 
 export interface CodingSessionOptions {
   /** Workspace root for repository tools (defaults to cwd). */
@@ -28,6 +29,8 @@ export interface CodingSessionOptions {
   pluginHooks?: AgentForgePlugin['hooks'];
   /** Phase C reflection config; enabled only when explicitly configured. */
   reflection?: ReflectionConfig;
+  /** Phase D live context compression tuning; defaults keep 96k chars / 20 recent messages. */
+  compression?: { maxChars?: number; keepRecent?: number; foldTextCap?: number };
 }
 
 interface QueuedEvent {
@@ -106,7 +109,10 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
         ...(reflection?.interceptors.preStep ?? []),
         ...(options.pluginHooks?.preStep as never[] ?? []),
       ],
-      preRequest: options.pluginHooks?.preRequest as never,
+      preRequest: [
+        createCompressionInterceptor(options.compression),
+        ...(options.pluginHooks?.preRequest as never[] ?? []),
+      ],
       preTool: options.pluginHooks?.preTool as never,
       postTool: options.pluginHooks?.postTool as never,
       turnStopping: [

@@ -4,6 +4,35 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### Loop upgrades: prompt caching, live compression, interrupt-and-redirect (Phase D — multi-project plan)
+
+- Anthropic prompt caching: the stable system prompt prefix is sent with a `cache_control` ephemeral marker on both `generate` and streaming requests, cutting repeated input cost for long coding sessions.
+- Live context compression: a deterministic `preRequest` interceptor (`packages/cli/src/context/compression.ts`) folds oversized message histories in place — keeps the first message and the most recent N (default 20) verbatim, replaces the middle with a bounded `[context folded]` summary of dropped turns. Defaults: 96,000-char trigger, configurable via `compression: { maxChars, keepMessages }` on the coding session. Deterministic only — no model calls, no nondeterministic summaries.
+- TUI interrupt-and-redirect: submitting a new message while a turn is running cancels the in-flight turn and queues the text; once the runner settles the queued message is sent automatically — no more rejected submits mid-run.
+- Tests: `packages/models/test/loop-upgrades.test.ts` covers the Anthropic caching wire format (generate + stream) and the compression fold behavior; full CLI suite (150) and core suite stay green.
+
+### Reflection engine, observe-only (Phase C — multi-project plan)
+
+- New reflection runtime (`packages/cli/src/reflection/review.ts`): observes each step via `preStep` and end-of-turn via `turnStopping` interceptors — **observe-only by doctrine: findings are recorded, never enforced**.
+- Fire-and-forget background reviewer receives a bounded transcript digest (`buildDigest`) and may only call `memory` (add) and `skill_manage` (stage) — it can leave notes and draft skills but cannot touch the session, files, or tools.
+- `reviewNow` runs the same review synchronously on demand. Config: `reflection: { enabled, provider, model }` in global config, **off by default**.
+- **One-policy-layer fix in core:** `AgentConfig.allowedToolPermissions` is now optional — when undefined, core applies no permission gate of its own; the CLI policy wrapper remains the single enforcement point. Previously the default-empty core gate denied every permissioned tool in live sessions. Regression-tested both ways.
+
+### Skills upgrade: folders, progressive disclosure, agent-authored skills (Phase B — multi-project plan)
+
+- Skills module rewritten (`packages/cli/src/skills/skills.ts`): supports folder layout `skills/<name>/SKILL.md` alongside flat `skills/<name>.md`, with frontmatter (name, description, metadata) via the existing parser.
+- Progressive disclosure: sessions inject only a compact skill index; full bodies and additional reference files load on demand through `readSkillReference` (path-escape guarded) and `listSkillReferences`.
+- Agent-authored skills: new `skill_view` and `skill_manage` tools. `skill_manage` write mode stages proposals under `.agentforge/pending/skills/` instead of writing directly; a `writeApproval: "staged"` session option controls the flow.
+- New `agentforge skills` command group: `list`, `pending`, `diff`, `approve`, `reject` — humans review and land (or reject) agent-drafted skills; staged writes never touch skills without approval.
+- Skill index injected into coding-session instructions; 7 new tests; CLI suite green.
+
+### Plugin kernel v2 + interceptor seam (Phase N — multi-project plan)
+
+- New core seam (`packages/core/src/interceptors.ts`): serial pipeline around the agent loop with `preStep`, `preRequest`, `preTool` (returning a string denies the tool call with that message), `postTool`, and `turnStopping` hooks; helpers `foldWaterfall`, `firstDenial`, `foldSerial`. `AgentConfig.interceptors` wires them into the loop — the single landing pad for reflection, plugin hooks, doom-loop guards, findings scanning, and compression.
+- Plugin contract v2 (`packages/cli/src/plugins/plugins.ts`, `PLUGIN_CONTRACT_VERSION = 2`): plugins contribute `hooks`, `skills`, `agents`, and `slashCommands`; plugin hooks are adapted into core interceptors and flow through `CodingSessionOptions`.
+- Lifecycle: `agentforge plugins enable|disable <name>` persists to the extension store (`PluginEntry.disabled`); disabled plugins are filtered at load (`disabledPluginKeys`).
+- Fixed a latent crash when plugin-contributed skills were rendered without `context.skills`.
+
 ### Persistent memory + workspace persona (Phase A — multi-project plan)
 
 - New memory module (`packages/cli/src/memory/`): `MEMORY.md` (agent notes, 2,200-char cap) and `USER.md` (user profile, 1,375-char cap) under `.agentforge/memories/` with global fallback `~/.agentforge/memories/`. Entries are `§`-separated; exact duplicates are rejected; capacity overflow returns the current entries plus consolidation guidance instead of failing silently.

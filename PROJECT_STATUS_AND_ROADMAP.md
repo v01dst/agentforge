@@ -991,7 +991,7 @@ data · "model-visible means logged" · one policy layer everywhere · everythin
 
 | Ver | Phases |
 | --- | --- |
-| 0.1.0 | A memory core ✅ · N plugin kernel + interceptor seam · B skills upgrade · C reflection · D loop upgrades · F agents/subagents · G permissions v2 |
+| 0.1.0 | A memory core ✅ · N plugin kernel + interceptor seam ✅ · B skills upgrade ✅ · C reflection ✅ · D loop upgrades ✅ · F agents/subagents · G permissions v2 |
 | 0.2.0 | H session manager (NDJSON log-as-truth) · I LSP bridge · P profiles · Q observability core · R security findings · T session modes |
 | 0.3.0 | J gateway serve (+OpenAI-compatible agent-as-model) · K daemon + heartbeat · S benchmarking |
 | 0.4.0 | L channel adapters (webhook + Telegram) · M device tools |
@@ -1008,6 +1008,33 @@ Phase A — memory core + workspace persona (landed):
 
 Open follow-ups carried into Phase N: the interceptor seam (pre-step/pre-request/pre-tool/post-tool/turn-stopping)
 is the landing pad for reflection, doom-loop, findings scanning, and compression.
+
+Phase N — plugin kernel v2 + interceptor seam (landed):
+
+- [x] Core seam `packages/core/src/interceptors.ts`: `preStep`, `preRequest`, `preTool` (string return = deny), `postTool`, `turnStopping`; helpers `foldWaterfall`/`firstDenial`/`foldSerial`; `AgentConfig.interceptors`.
+- [x] Plugin contract v2 with `hooks`/`skills`/`agents`/`slashCommands` contributions; plugin hooks adapted to core interceptors via `CodingSessionOptions`.
+- [x] Lifecycle commands `agentforge plugins enable|disable` persisted via `PluginEntry.disabled`.
+- [x] Tests: core interceptor suite + CLI plugin kernel suite; both packages green.
+
+Phase B — skills upgrade (landed):
+
+- [x] Folder layout `skills/<name>/SKILL.md` + flat `.md` fallback; frontmatter-parsed.
+- [x] Progressive disclosure: compact index in instructions; `skill_view` loads bodies/reference files on demand (path-escape guarded).
+- [x] Agent-authored skills: `skill_manage` with staged writes under `.agentforge/pending/skills/`; `agentforge skills list|pending|diff|approve|reject`.
+- [x] Tests: 7 new; CLI suite green.
+
+Phase C — reflection, observe-only (landed):
+
+- [x] `createReflectionRuntime`: `preStep` + `turnStopping` observe-only interceptors; fire-and-forget reviewer with `memory` + `skill_manage` only; `buildDigest` bounded transcript; `reviewNow` on demand.
+- [x] Config `reflection: { enabled, provider, model }`; off by default.
+- [x] One-policy-layer fix: core `allowedToolPermissions` optional — undefined disables the core gate; CLI policy wrapper stays the single enforcement point (regression-tested both ways).
+
+Phase D — loop upgrades (landed):
+
+- [x] Anthropic prompt caching: `cache_control` ephemeral marker on the stable system prefix (generate + stream).
+- [x] Live context compression: deterministic `preRequest` interceptor folds oversized histories (96k-char default trigger, 20 recent messages kept verbatim); `compression` session options.
+- [x] TUI interrupt-and-redirect: submitting during a run cancels the in-flight turn and queues the message, re-sent when the runner settles.
+- [x] Tests: `packages/models/test/loop-upgrades.test.ts` (caching wire format + compression fold); models + CLI + core suites green.
 
 ## 16. Definition of “Ready to Use”
 

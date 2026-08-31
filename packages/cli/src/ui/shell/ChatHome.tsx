@@ -96,6 +96,8 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
   const summaryRef = useRef<string | undefined>(undefined);
   /** Original creation timestamp; autosave must not rewrite history. */
   const createdAtRef = useRef<string | null>(null);
+  /** Interrupt-and-redirect (Phase D): text queued while a turn was running. */
+  const redirectRef = useRef<string | null>(null);
   const [input, setInput] = useState(initialInput ?? '');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -131,6 +133,16 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Interrupt-and-redirect: once a cancelled/finished turn settles, resend the
+  // queued message as a fresh turn.
+  useEffect(() => {
+    if (running || !redirectRef.current) return;
+    const queued = redirectRef.current;
+    redirectRef.current = null;
+    void send(queued);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running]);
 
   // Autosave whenever the transcript changes while idle. Long transcripts are
   // compacted on disk (recent tail + rolling summary); the live view is intact.
@@ -213,6 +225,14 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
     draftRef.current = '';
     if (!raw.startsWith('/')) {
       if (handleOnboardingInput(raw)) return;
+      if (running) {
+        // Interrupt-and-redirect (Phase D): a new message during a run cancels
+        // the turn and resends as soon as it settles.
+        redirectRef.current = raw;
+        cancel();
+        pushSystem(`↩ cancelling current turn — will redirect to: ${raw.slice(0, 60)}`);
+        return;
+      }
       void send(raw);
       return;
     }
