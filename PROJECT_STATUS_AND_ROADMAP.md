@@ -991,7 +991,7 @@ data · "model-visible means logged" · one policy layer everywhere · everythin
 
 | Ver | Phases |
 | --- | --- |
-| 0.1.0 | A memory core ✅ · N plugin kernel + interceptor seam ✅ · B skills upgrade ✅ · C reflection ✅ · D loop upgrades ✅ · F agents/subagents ✅ · G permissions v2 |
+| 0.1.0 | A memory core ✅ · N plugin kernel + interceptor seam ✅ · B skills upgrade ✅ · C reflection ✅ · D loop upgrades ✅ · F agents/subagents ✅ · G permissions v2 ✅ |
 | 0.2.0 | H session manager (NDJSON log-as-truth) · I LSP bridge · P profiles · Q observability core · R security findings · T session modes |
 | 0.3.0 | J gateway serve (+OpenAI-compatible agent-as-model) · K daemon + heartbeat · S benchmarking |
 | 0.4.0 | L channel adapters (webhook + Telegram) · M device tools |
@@ -1044,6 +1044,15 @@ Phase F — agents & subagents (landed):
 - [x] Subagent index in session instructions; `/agents` screen lists markdown agents (mode + posture, no entry hijack); `@mention` delegation hints in chat.
 - [x] `/plan` (read-only posture) and `/build` (workspace-write posture) mode switches.
 - [x] Tests: 9 new; reflection teardown hardened; CLI suite green.
+
+Phase G — permissions v2 (landed):
+
+- [x] Structured rule matching: globs (`mcp.*`), dotted hierarchy prefixes, `*`; specificity tiers (prefix > exact > hierarchy > glob > `*`), deny beats allow at equal specificity.
+- [x] `run_command:prefix=<line>` rules with deny-precedence on overlap; prefix-allowed commands skip approval prompts.
+- [x] `external_directory:<path>` grants via path checks (relative paths resolve against the workspace root; `..` escapes still refused).
+- [x] Unknown rule qualifiers rejected at load (fail closed).
+- [x] Doom-loop guard as a `preTool` interceptor (denies 3rd identical consecutive call); wired into every coding session.
+- [x] Tests: +7 suites; CLI suite 193 green.
 
 ## 16. Definition of “Ready to Use”
 

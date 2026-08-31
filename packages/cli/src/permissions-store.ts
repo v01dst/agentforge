@@ -4,7 +4,11 @@ import { dirname, join, resolve } from 'node:path';
 
 /** A per-tool permission rule persisted at project level. */
 export interface PermissionRule {
-  /** Tool name (e.g. `run_command`, `mcp.server.tool`) or the global `*`. */
+  /**
+   * Tool name (e.g. `run_command`), the global `*`, a glob (`mcp.*`, `**`),
+   * a dotted hierarchy prefix (`mcp.server`), or a qualified rule:
+   * `run_command:prefix=<line>` or `external_directory:<path>`.
+   */
   tool: string;
   action: 'allow' | 'deny';
 }
@@ -20,12 +24,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Valid rule targets: plain tool names, `*`, globs, dotted hierarchy
+ * prefixes, `run_command:prefix[=…]`, and `external_directory:<path>`.
+ * Unknown qualifiers (e.g. `read_file:bogus`) are rejected.
+ */
+const RULE_TARGET = /^[a-zA-Z*][a-zA-Z0-9.*_-]{0,127}$/;
+const EXTERNAL_TARGET = /^external_directory:\s*\S.*$/;
+const PREFIX_TARGET = /^[a-zA-Z][a-zA-Z0-9._-]{0,127}:prefix(=\s*\S.*)?$/;
+
 /** Validate one parsed rule; throws with a human-readable message. */
 export function validatePermissionRule(value: unknown): PermissionRule {
   if (!isRecord(value)) throw new Error('Permission rules must be objects.');
   const tool = typeof value.tool === 'string' ? value.tool : '';
-  if (tool !== '*' && !/^[a-zA-Z][a-zA-Z0-9._-]{0,127}$/.test(tool)) {
-    throw new Error(`Permission rule tool '${String(value.tool)}' must be a tool name or '*'.`);
+  const validTarget = tool === '*' || RULE_TARGET.test(tool) || EXTERNAL_TARGET.test(tool) || PREFIX_TARGET.test(tool);
+  if (!validTarget) {
+    throw new Error(`Permission rule tool '${String(value.tool)}' must be a tool name, glob, or qualified rule (tool:prefix=…, external_directory:<path>).`);
   }
   const actionText = typeof value.action === 'string' ? value.action : '';
   if (actionText !== 'allow' && actionText !== 'deny') {
@@ -71,21 +85,12 @@ export async function writePermissionRules(rules: readonly PermissionRule[], cwd
 }
 
 /**
- * Evaluation order: most specific rule wins; deny beats allow at equal
- * specificity; no matching rule returns undefined (mode logic decides).
+ * Evaluation moved to permissions-rules.ts (Phase G): glob patterns, dotted
+ * hierarchies, command prefixes, and external directories. This re-export
+ * keeps the legacy per-tool entry point.
  */
-export function evaluateRules(rules: readonly PermissionRule[], tool: string): 'allow' | 'deny' | undefined {
-  let verdict: 'allow' | 'deny' | undefined;
-  let specificity = -1;
-  for (const rule of rules) {
-    if (rule.tool !== '*' && rule.tool !== tool) continue;
-    const ruleSpecificity = rule.tool === '*' ? 0 : 1;
-    if (ruleSpecificity < specificity) continue;
-    verdict = rule.action;
-    specificity = ruleSpecificity;
-  }
-  return verdict;
-}
+export { evaluateRules, evaluateInvocationRules, externalDirectories, isPathAllowed } from './permissions-rules.js';
+export type { CommandContext, RuleEvaluationInput } from './permissions-rules.js';
 
 export async function addPermissionRule(tool: string, action: PermissionRule['action'], options: { force?: boolean } = {}, cwd = process.cwd()): Promise<{ replaced: boolean }> {
   const rules = await readPermissionRules(cwd);

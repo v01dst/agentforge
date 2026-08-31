@@ -4,6 +4,15 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### Permissions v2: structured rules + doom-loop guard (Phase G — multi-project plan)
+
+- Rules become structured matchers (`.agentforge/permissions.json`): plain tool names, the `*` wildcard, globs (`mcp.*`), and dotted hierarchy prefixes (`mcp.server` covers `mcp.server.tool`). Specificity tiers — prefix > exact > hierarchy > glob > `*` — with deny beating allow at equal specificity; a later, more specific rule can carve exceptions out of a broad deny.
+- Command-prefix rules: `run_command:prefix=git status` (or `agentforge permissions allow run_command --prefix "git status"`). A prefix allow overrides a general `run_command` deny for matching command lines; a prefix deny beats a broad allow. Prefix-allowed commands skip the approval prompt; everything else keeps the mode flow.
+- `external_directory:<path>` grants extend the readable boundary for path-bearing tools without weakening the workspace check elsewhere: relative paths still resolve against the workspace root, `..` escapes are still refused, and ungranted external paths still throw.
+- Unknown qualifiers are rejected at load (`read_file:bogus` fails closed with the standard malformed-file warning).
+- Doom-loop guard: a `preTool` interceptor wired into every coding session denies the third consecutive identical tool call (same tool + same arguments) with guidance to change approach instead of burning context.
+- Tests: +7 rule-evaluation/policy/guard suites; full CLI suite 193 green.
+
 ### Agents & subagents (Phase F — multi-project plan)
 
 - Markdown agent definitions: `.agentforge/agents/<name>.md` (flat) or `.agentforge/agents/<name>/AGENT.md` (folder), with a global fallback at `~/.agentforge/agents/`. Project files shadow global ones, which shadow the built-ins, all matched by name. Frontmatter: `mode: primary|subagent` (default `subagent`), `description`, `model`, `temperature`, `steps` (child max iterations), `permission: read-only|workspace-write|trusted`. The markdown body is the agent's prompt.

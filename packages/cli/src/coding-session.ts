@@ -13,6 +13,7 @@ import { listAgentsSync, renderAgentIndex } from './agents/agents.js';
 import type { AgentForgePlugin } from './plugins/plugins.js';
 import { createReflectionRuntime, type ReflectionConfig } from './reflection/review.js';
 import { createCompressionInterceptor } from './context/compression.js';
+import { createDoomLoopGuard } from './guards/doom-loop.js';
 
 export interface CodingSessionOptions {
   /** Workspace root for repository tools (defaults to cwd). */
@@ -124,7 +125,10 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
         createCompressionInterceptor(options.compression),
         ...(options.pluginHooks?.preRequest as never[] ?? []),
       ],
-      preTool: options.pluginHooks?.preTool as never,
+      preTool: [
+        createDoomLoopGuard(),
+        ...(options.pluginHooks?.preTool as never[] ?? []),
+      ],
       postTool: options.pluginHooks?.postTool as never,
       turnStopping: [
         ...(reflection?.interceptors.turnStopping ?? []),

@@ -850,13 +850,19 @@ export async function permissionsCommand(args: string[], flags: Record<string, s
       return 0;
     }
     for (const rule of rules) info(`  ${rule.action.padEnd(6)} ${rule.tool}`);
-    hint('deny blocks a tool in every mode; allow skips its approval prompt. Workspace path checks always apply.');
+    hint('deny blocks a tool in every mode; allow skips its approval prompt.');
+    hint('Qualified forms: tool:prefix=<line> (run_command), external_directory:<path>, glob patterns.');
+    hint('Workspace path checks always apply unless an external_directory rule grants a path.');
     return 0;
   }
   if (sub === 'allow' || sub === 'deny') {
     if (!tool) throw new Error(`Usage: agentforge permissions ${sub} <tool>.`);
-    const result = await addPermissionRule(tool, sub, { force: flagBoolean(flags, 'force') });
-    success(`${result.replaced ? 'Replaced' : 'Added'} rule: ${sub} ${tool} in .agentforge/permissions.json`);
+    const prefix = flags.prefix;
+    const target = typeof prefix === 'string' && prefix.length
+      ? `${tool}:prefix=${prefix}`
+      : tool;
+    const result = await addPermissionRule(target, sub, { force: flagBoolean(flags, 'force') });
+    success(`${result.replaced ? 'Replaced' : 'Added'} rule: ${sub} ${target} in .agentforge/permissions.json`);
     return 0;
   }
   if (sub === 'remove' || sub === 'rm') {

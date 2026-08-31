@@ -1,5 +1,11 @@
 import { relative, resolve, isAbsolute } from 'node:path';
-import { evaluateRules, type PermissionRule } from './permissions-store.js';
+import {
+  evaluateInvocationRules,
+  externalDirectories,
+  isPathAllowed,
+  type CommandContext,
+  type PermissionRule,
+} from './permissions-store.js';
 
 /** Structural view of a core ToolLike; the CLI intentionally does not depend on @agentforge-oss/core. */
 interface PolicyTool {
@@ -72,11 +78,12 @@ export interface WorkspacePolicyOptions {
   rules?: readonly PermissionRule[];
 }
 
-function withinRoot(root: string, candidate?: string): boolean {
-  if (!candidate) return true;
-  const full = isAbsolute(candidate) ? candidate : resolve(root, candidate);
-  const rel = relative(root, full);
-  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
+/** run_command invocation shape for structured rule matching. */
+function commandContextOf(tool: string, input: unknown): CommandContext | undefined {
+  if (tool !== 'run_command') return undefined;
+  const value = input as { command?: string; args?: string[] };
+  if (typeof value?.command !== 'string') return undefined;
+  return { command: value.command, args: value.args };
 }
 
 /**
@@ -99,16 +106,26 @@ export function applyWorkspacePolicy(tool: PolicyTool, options: WorkspacePolicyO
     timeoutMs: tool.timeoutMs,
     retries: tool.retries,
     async execute(input, context) {
-      // Per-tool rules take precedence over mode defaults, before anything runs.
-      const ruleVerdict = evaluateRules(options.rules ?? [], tool.name);
+      // Structured rules (Phase G) take precedence over mode defaults, before
+      // anything runs: globs, dotted hierarchies, run_command prefixes, and
+      // external-directory grants all evaluate here.
+      const commandContext = commandContextOf(tool.name, input);
+      const ruleVerdict = evaluateInvocationRules(
+        options.rules ?? [],
+        commandContext ? { tool: tool.name, command: commandContext } : { tool: tool.name },
+      );
       if (ruleVerdict === 'deny') {
         throw new Error(`Tool ${tool.name} is blocked by a project permission rule (.agentforge/permissions.json).`);
       }
 
-      // Workspace boundary checks for well-known path-bearing inputs.
+      // Workspace boundary checks for well-known path-bearing inputs. A path
+      // rule grant (external_directory allow) extends the readable boundary.
       const candidate = input as { path?: string };
-      if (typeof candidate?.path === 'string' && !withinRoot(root, candidate.path)) {
-        throw new Error(`Path escapes the workspace root (${root}); refusing ${tool.name}.`);
+      if (typeof candidate?.path === 'string') {
+        const external = externalDirectories(options.rules ?? [], root);
+        if (!isPathAllowed(root, candidate.path, external)) {
+          throw new Error(`Path escapes the workspace root (${root}); refusing ${tool.name}.`);
+        }
       }
 
       if (ruleVerdict === 'allow') {
