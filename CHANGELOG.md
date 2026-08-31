@@ -2,7 +2,43 @@
 
 All notable changes to AgentForge are documented here.
 
-## [Unreleased]
+## [0.0.2] — 2026-08-31
+
+### Workflow documents: schema, validation, import/export (Phase 7)
+
+- Versioned JSON workflow documents (`version: 1`): nodes carry type + optional handler name/branches/config; edges carry labels and condition-handler names. Behavior is attached at compile time through a handlers registry plus live agent/model/tool instances — no `eval`, no code in documents.
+- `validateWorkflowDocument` reports every structural problem with precise messages (version, duplicate ids, unknown types, dangling/duplicate edges, missing start, unreachable-node warnings) and verifies handler availability when a registry is provided.
+- `compileWorkflowDocument` builds an executable `Workflow`; `parseWorkflowDocument`/`serializeWorkflowDocument` provide validated import/export. `WorkflowBuilder.build()` accepts an optional EventBus.
+- Deterministic replay tests: repeated compilations of the same document produce identical step histories (JSON-serializable), branching, parallel fan-out, and retry semantics covered (`packages/workflows/test/document.test.ts`).
+- New `agentforge workflows validate <file.json>` CLI command (`--json` supported).
+
+### Session depth (v0.1 phase D)
+
+- New session operations: `agentforge sessions rename <id> <title>`, `export <id> [--format md|json] [--out <path>]`, `prune --older-than-days <n> | --keep <n> [--dry-run]`, and chat slash commands `/rename <title>` (current session) and `/show [id]` (recent transcript).
+- Schema versioning: stored sessions carry `version: 1`; older files are treated as version 1 transparently.
+- Context compaction: transcripts past 40 entries are compacted on disk to the most recent 20 plus a bounded `[earlier conversation]` summary; the live TUI view stays intact and summaries carry across resumes. `transcriptSession` replay prompts compact the same way so one-shot entrypoints stay bounded in long sessions.
+- Autosave integrity fixes: custom titles (`/rename`) survive subsequent autosaves, `createdAt` is no longer rewritten on every save.
+- `agentforge inspect <id>` now recognizes stored session ids (or `--session`) and renders transcript + metadata; corrupt session files are skipped by list/load instead of crashing.
+
+### Provider streaming and conformance (v0.1 phase E)
+
+- Streaming implemented for all HTTP providers: OpenAI (`stream_options.include_usage`), Anthropic (SSE events incl. `input_json_delta` assembly), Gemini (`streamGenerateContent?alt=sse`) — openai-compatible endpoints stream through the OpenAI adapter. Streamed tool-call argument fragments are accumulated per index and emitted as assembled calls.
+- New `ModelHttpError` with `status`, `retryable` (429/5xx), and `retryAfterMs` (from `Retry-After`, seconds or HTTP-date); all adapters throw it instead of generic errors.
+- Recorded-fixture conformance tests: streaming text/tool-calls/usage per protocol, stream-vs-generate content equality, and error classification (`packages/models/test/streaming-conformance.test.ts`).
+- New `agentforge models test <provider> [--model] [--prompt] [--json]`: one-shot connectivity probe for builtin providers and managed endpoints with precise failures (names the missing env var, HTTP status + retryability).
+
+### CLI verification backlog
+
+- New CLI tests: `doctor --json` pass/fail with resolved entrypoint paths, `--cwd` project targeting from a foreign working directory, config-relative run discovery, `init .` name derivation (extends existing scaffold coverage).
+
+### Permission and safety hardening (Phase 5)
+
+- Per-tool allow/deny rules persisted at project level (`.agentforge/permissions.json`) with `agentforge permissions list|allow|deny|remove <tool>` (`--json` on list). Evaluation precedence: most specific rule wins, deny beats allow, rules beat mode defaults — deny blocks a tool in every mode, allow skips its approval prompt. Workspace path checks are never bypassed by rules.
+- Live coding sessions load project rules at runner build time; malformed rule files fail closed (rules ignored with a stderr warning, never a silent bypass).
+- `run_command` now rejects path-like arguments resolving outside the workspace root (absolute paths, `..` escapes, `~`, `--flag=/etc/...` values; `/dev/null` exempt; opt out with `restrictPathArgs: false`). Default blocklist extended: `rm` against `~`/`*`/`.`/`..`/`$HOME`, `su`, `chown` on root paths, `dd of=/dev/*`, `shutdown`/`reboot`/`halt`/`poweroff`, `wipefs`, `curl|sh` / `wget|sh`.
+- `read_file` refuses credential/secret files by default (`.env*` except `.env.example`, `*.pem|key|p12|pfx|keystore`, `id_rsa/dsa/ecdsa/ed25519`, `.ssh/`, `.netrc`, `.git-credentials`, `.htpasswd`); `search_text` skips them entirely. Opt in with `allowSecretFiles: true`.
+- `http_request` follows redirects manually and re-validates every hop against private-network blocks and host allowlists — closing the redirect-bypass SSRF hole. Numeric IPv4 literals that `isIP` misses (decimal `2130706433`, hex `0x7f000001`, octal `0177.0.0.1`, shorthand `127.1`) are canonicalized and privacy-checked.
+- New adversarial suites: `packages/tools/test/security.test.ts` (SSRF bypass attempts, redirect chains, secret-file reads, path-arg escapes, blocklist coverage) and `packages/cli/test/permissions-rules.test.ts` (rule store, precedence, policy wiring).
 
 ### Durable sessions (v0.1 phase C)
 
@@ -29,7 +65,12 @@ All notable changes to AgentForge are documented here.
 
 ### Versioning
 
-- The project is now branded **AgentForge v0.01** (`0.0.1`): a deliberate restart of the public version line. All workspace packages, scaffold templates, and the CLI banner report `0.0.1`.
+- The project is now branded **AgentForge v0.01** (`0.0.1`): a deliberate restart of the public version line. All workspace packages, scaffold templates, and the CLI banner report `0.0.1`. This release (`0.0.2`) is the first increment on that line; scaffolds and the banner now reference `0.0.2`.
+
+### Roadmap truth pass and baseline re-verification
+
+- `PROJECT_STATUS_AND_ROADMAP.md` updated to reflect landed work (Phases 0–5 statuses, Milestone C completion, §6.8/§7.5/§11.5/§11.3).
+- Full quality gate re-verified twice on-device, serially: typecheck 23/23, lint 23/23, test 23/23, build 14/14 (playground production build included).
 
 ### Extensions: plugins, skills, MCP (new)
 

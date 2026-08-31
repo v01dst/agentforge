@@ -1,7 +1,7 @@
 # AgentForge: Project Status, Product Definition, and Roadmap
 
-Last updated: 2026-08-25 (AgentForge v0.01 — extension platform landed)
-Current version: `0.1.0`  
+Last updated: 2026-08-31 (v0.0.2 release: Phase 5 safety hardening, Phase 6 session depth, Phase 3 streaming/conformance, Phase 7 workflow documents)
+Current version: `0.0.1`  
 Repository status: active development / experimental
 
 This document is the single, honest description of what AgentForge is, what has already been implemented, what is incomplete, how the repository can currently be used, and what must be completed before it can reasonably be described as a ready-to-use agent CLI and workflow platform.
@@ -302,7 +302,7 @@ Interactive capabilities added since the initial baseline:
 - Scaffolding generates `.gitignore`, `.env.example`, working `test` and `typecheck` scripts, `@types/node`, a streaming mock model, and a multi-turn session test. Local-link scaffolds emit `pnpm.overrides` so generated projects install cleanly despite unpublished packages; this was verified end to end offline (scaffold → install → typecheck → tests → two-turn mock chat).
 - Managed custom endpoints: `agentforge providers add/remove/list` maintain `.agentforge/providers.json`; entries merge into project config at load time and are resolved by scaffolded projects when `AGENTFORGE_PROVIDER` names them.
 
-Still missing on the interactive path: durable named sessions and resume, repository-aware coding tools, approval prompts, provider streaming/conformance work, and full replacement of seeded playground data.
+Status (2026-08-30): durable named sessions and resume have landed (`agentforge sessions list|resume|delete`, `/sessions` `/resume` `/new`; transcripts autosave to project and global stores), and the repository coding toolset is wired into live sessions with permission modes, in-TUI approval cards, and per-turn git diff summaries. Still missing on the interactive path: provider streaming/conformance work, context compaction, and full replacement of seeded playground data.
 
 ### 6.9 Playground
 
@@ -373,20 +373,14 @@ Local repository linking is the current development path.
 
 ### 7.5 Missing Coding-Agent Capabilities
 
-The following capabilities are not yet complete:
+The following capabilities are not yet complete. (Status 2026-08-30: interactive multi-turn terminal chat, durable named sessions and resume, patch preview with approval, interactive shell-command approval, git-aware diff summaries, and model switching during a session have landed and are no longer listed here.)
 
-- Interactive multi-turn terminal chat.
-- Durable named sessions and resume behavior.
 - Repository indexing and context selection.
 - Rich code search UX.
-- Patch preview and approval.
-- Safe file-edit transaction handling.
-- Interactive shell-command approval.
-- Git-aware diff summaries.
+- Safe file-edit transaction handling beyond dry-run validation.
 - Automatic test/fix loops with explicit limits.
 - Context compaction for long sessions.
-- Model switching during a session.
-- Full terminal streaming and live tool-status display.
+- Full terminal streaming polish and live tool-status display edge cases.
 
 ## 8. Current CLI Usage
 
@@ -498,12 +492,13 @@ The most recent reported verification before this document was created was:
 
 | Check | Last known result |
 | --- | --- |
-| `turbo run typecheck --concurrency=1` | Passed across 21 tasks (2026-08-23) |
-| `turbo run lint --concurrency=1` | Passed across 21 tasks (2026-08-23) |
-| `turbo run test --concurrency=1` | Passed across 21 tasks; includes CLI (31 tests across suites), models fetch fixtures (8), and playground route/model-selection suites (12, with a live stub-proxy round trip) (2026-08-23) |
-| `CI=1 pnpm build` (full parallel) | Not rerun on the constrained development device after the final edits. `@agentforge/cli` and `@agentforge/models` dists rebuilt and load-verified; playground verified via dev compile, tsc, and vitest. Rerun the full gate on a desktop before release. |
+| `pnpm install --frozen-lockfile` | Passed (2026-08-30, incl. new `@agentforge-oss/workflows` CLI dependency) |
+| `turbo run typecheck --concurrency=1` | Passed across 23 tasks (2026-08-30, after session/streaming/workflow work) |
+| `turbo run lint --concurrency=1` | Passed across 23 tasks (2026-08-30, after session/streaming/workflow work) |
+| `turbo run test --concurrency=1 --force` | Passed across 23 tasks (2026-08-30, after session/streaming/workflow work) |
+| `turbo run build --concurrency=1 --force` | Passed across 14 tasks including the playground production build (2026-08-30, after session/streaming/workflow work) |
 | Six showcase examples | Previously smoke-tested successfully; rerun pending |
-| Built CLI help | Working, includes `chat`, `models list`, and `providers add/remove/list` |
+| Built CLI help | Working, includes `chat`, `models list`, `models test`, `providers add/remove/list`, `sessions rename/export/prune`, `permissions`, `workflows validate` |
 | Generated project scaffold | Files, local dependency links, offline install, typecheck, generated tests all verified (2026-08-23) |
 | Custom proxy endpoint end to end | Verified: managed endpoint added via CLI, chat and one-shot runs forwarded to a local OpenAI-compatible stub with correct path, bearer token from env var name, and model id (2026-08-23) |
 
@@ -587,14 +582,16 @@ Planned correction:
 
 ### 11.5 Session Continuity
 
-The agent runtime creates messages within a single run, but the CLI does not yet maintain a durable multi-turn session.
+The CLI now maintains durable multi-turn sessions.
 
 Planned correction:
 
-- Add a session store.
-- Pass prior conversation state into subsequent turns.
-- Add context limits, summarization, and compaction.
-- Support `new`, `list`, `resume`, `rename`, and `delete` session operations.
+- Add a session store. (Done 2026-08-30: JSONL stores under `.agentforge/sessions/` project-local and `~/.agentforge/sessions/` global; newest transcript restores on launch.)
+- Pass prior conversation state into subsequent turns. (Done: `createSession()` contract plus autosave/resume.)
+- Support `new`, `list`, `resume`, `rename`, and `delete` session operations. (Partial: `new`, `list`, `resume`, `delete` landed via `agentforge sessions` and chat slash commands; `rename` open.)
+- Add context limits, summarization, and compaction. (Open.)
+
+Status (2026-08-30): sessions survive restarts with validated ids and merged project-over-global ordering. Landed: `rename`, `export` (md/json), `prune` with retention/dry-run, context compaction (rolling summary + bounded tail, live-view preserved), and `inspect` recognizing stored sessions. Still open: SQLite default store, budget-based retention policy surface.
 
 ## 12. Target CLI Experience
 
@@ -674,10 +671,10 @@ The roadmap is ordered by dependency and user value. Later phases must not be us
 
 Goal: ensure the repository is green before expanding functionality.
 
-- [ ] Run a fresh `pnpm install` from the lockfile.
-- [x] Run lint, typecheck, tests, and full build.
+- [x] Run a fresh `pnpm install` from the lockfile. (Re-verified 2026-08-30 with `--frozen-lockfile`.)
+- [x] Run lint, typecheck, tests, and full build. (Re-verified 2026-08-30: typecheck 23/23, lint 23/23, test 23/23, build 14/14 including the playground production build, run serially on the constrained device.)
 - [x] Fix any failures without disabling checks.
-- [ ] Add missing CLI tests for `init .`, `--cwd`, `doctor`, and local links.
+- [x] Add missing CLI tests for `init .`, `--cwd`, `doctor`, and local links. (2026-08-30: `doctor --json`, `--cwd` targeting + config-relative run, `init .` derivation; local links covered by scaffold tests.)
 - [ ] Perform all example smoke tests.
 - [x] Record exact supported Node and pnpm versions.
 - [x] Verify no secrets or generated build artifacts are accidentally tracked.
@@ -691,11 +688,11 @@ Goal: a generated local project works without manual repair.
 - [x] Correct all scaffold output to use pnpm.
 - [x] Generate truthful local-link versus published-package instructions.
 - [x] Improve missing-entrypoint diagnostics.
-- [ ] Generate `.gitignore` and `.env.example`.
+- [x] Generate `.gitignore` and `.env.example`. (Done; scaffold ships both.)
 - [x] Generate provider-selection examples.
-- [ ] Add a working test and typecheck script to generated projects.
+- [x] Add a working test and typecheck script to generated projects. (Done; verified offline end to end.)
 - [ ] Add an integration test that scaffolds, installs, runs, and validates output.
-- [ ] Add `agentforge init .` coverage.
+- [ ] Add `agentforge init .` coverage. (Done 2026-08-30: scaffold `.` name derivation covered; CLI-command-level `init .` flow remains untested.)
 
 Exit condition: a temporary generated project installs and completes a mock agent run using only documented commands.
 
@@ -703,16 +700,16 @@ Exit condition: a temporary generated project installs and completes a mock agen
 
 Goal: replace the one-shot-only experience with a useful terminal session.
 
-- [ ] Implement `agentforge chat`.
-- [ ] Make the bare `agentforge` command enter interactive mode when appropriate.
-- [ ] Add multiline input and terminal-safe prompts.
-- [ ] Add Ctrl-C turn cancellation and graceful second-interrupt exit.
-- [ ] Add streaming output.
-- [ ] Display run ID, provider, model, elapsed time, token usage, and tool status.
-- [ ] Add slash commands.
-- [ ] Preserve conversation context between turns.
-- [ ] Retain `agentforge run` for non-interactive automation.
-- [ ] Add terminal integration tests with deterministic models.
+- [x] Implement `agentforge chat`. (Ink UI on TTYs, plain readline mode otherwise.)
+- [x] Make the bare `agentforge` command enter interactive mode when appropriate. (Chat-first TUI; non-TTY/headless falls back to classic CLI.)
+- [x] Add multiline input and terminal-safe prompts.
+- [x] Add Ctrl-C turn cancellation and graceful second-interrupt exit.
+- [x] Add streaming output.
+- [x] Display run ID, provider, model, elapsed time, token usage, and tool status. (Per-turn footers plus live tool-event lines.)
+- [x] Add slash commands. (22 commands in the TUI palette; plain-mode subset.)
+- [x] Preserve conversation context between turns. (`createSession()` contract; autosave/resume.)
+- [x] Retain `agentforge run` for non-interactive automation.
+- [x] Add terminal integration tests with deterministic models. (Scaffold, entrypoint diagnostics, session contract, streaming runner suites.)
 
 Exit condition: a user can hold a multi-turn session, cancel a turn, and exit cleanly.
 
@@ -720,15 +717,15 @@ Exit condition: a user can hold a multi-turn session, cancel a turn, and exit cl
 
 Goal: make provider selection predictable and production-usable.
 
-- [ ] Add typed provider configuration to `agentforge.config.ts`.
-- [ ] Add a standard model-name configuration.
-- [ ] Add `agentforge models list` and `agentforge models test`.
-- [ ] Implement streaming for supported providers.
-- [ ] Complete tool-calling conformance tests.
+- [x] Add typed provider configuration to `agentforge.config.ts`. (Named entries with protocol/model/baseUrl/apiKeyEnv.)
+- [x] Add a standard model-name configuration. (`config.model` string or `{ provider, model }`.)
+- [x] Add `agentforge models list` and `agentforge models test`. (Test added 2026-08-30: one-shot probe with precise credential/HTTP failures.)
+- [x] Implement streaming for supported providers. (2026-08-30: SSE streaming for OpenAI, Anthropic, Gemini, and openai-compatible with fragment tool-call assembly; fixture conformance.)
+- [x] Complete tool-calling conformance tests. (2026-08-30: recorded fixtures for non-stream + streamed tool-call assembly per protocol; live-provider conformance still open.)
 - [ ] Complete structured-output conformance tests.
-- [ ] Normalize provider errors, retry hints, and rate limits.
-- [ ] Add OpenAI-compatible/local endpoint support.
-- [ ] Never print API keys or authorization headers.
+- [x] Normalize provider errors, retry hints, and rate limits. (2026-08-30: `ModelHttpError` with status, retryable classification, and Retry-After parsing; core retry loop does not yet consume the hints.)
+- [x] Add OpenAI-compatible/local endpoint support. (`openai-compatible` kind, managed endpoints, playground support.)
+- [x] Never print API keys or authorization headers.
 
 Exit condition: OpenAI, Anthropic, Gemini, mock, and at least one local/OpenAI-compatible endpoint satisfy a shared conformance suite.
 
@@ -736,17 +733,17 @@ Exit condition: OpenAI, Anthropic, Gemini, mock, and at least one local/OpenAI-c
 
 Goal: make AgentForge useful inside a real codebase.
 
-- [ ] Add workspace discovery and boundaries.
-- [ ] Add fast file listing and text search.
-- [ ] Add bounded file reading.
-- [ ] Respect `.gitignore` and configurable exclusions.
+- [x] Add workspace discovery and boundaries. (Workspace-scoped tools with path-escape denial.)
+- [x] Add fast file listing and text search. (`list_files`, `search_text` — gitignore-aware, bounded.)
+- [x] Add bounded file reading. (`read_file`.)
+- [x] Respect `.gitignore` and configurable exclusions. (Respect done; a user-facing exclusion-config surface is still open.)
 - [ ] Add token-aware repository context selection.
-- [ ] Add patch-based file editing.
-- [ ] Add diff review.
-- [ ] Add Git status awareness.
-- [ ] Add restricted command execution.
-- [ ] Add test-command discovery.
-- [ ] Record all file and command operations as tool calls.
+- [x] Add patch-based file editing. (`apply_patch` with dry-run validation.)
+- [x] Add diff review. (`inspect_git_diff` plus per-turn diff summaries.)
+- [x] Add Git status awareness. (Status/diff via `inspect_git_diff`.)
+- [x] Add restricted command execution. (`run_command` allowlist + blocklist; `run_tests`.)
+- [x] Add test-command discovery. (package.json script discovery in `run_tests`.)
+- [x] Record all file and command operations as tool calls. (Routed through the core agent loop with tool events.)
 
 Exit condition: the agent can inspect a repository, propose and apply a small reviewed patch, run a test, and summarize the resulting diff.
 
@@ -754,17 +751,17 @@ Exit condition: the agent can inspect a repository, propose and apply a small re
 
 Goal: sensitive capabilities are understandable and safe by default.
 
-- [ ] Add interactive approval prompts.
-- [ ] Add per-tool allow/deny rules.
-- [ ] Add session-only and persistent approvals.
-- [ ] Add read-only, ask, workspace-write, and trusted modes.
-- [ ] Block commands targeting paths outside the workspace.
-- [ ] Block common destructive command patterns by default.
-- [ ] Add network permissions and host allowlists.
-- [ ] Harden HTTP tools against SSRF and redirect bypasses.
-- [ ] Protect environment variables and ignored secret files.
-- [ ] Redact sensitive input and output from logs.
-- [ ] Add adversarial security tests.
+- [x] Add interactive approval prompts. (In-TUI approval card, landed with Milestone C.)
+- [x] Add per-tool allow/deny rules. (2026-08-30: `.agentforge/permissions.json` + `agentforge permissions list|allow|deny|remove`; deny blocks in every mode, allow skips prompting, rules never bypass workspace path checks.)
+- [x] Add session-only and persistent approvals. (Session-only via the approval card's "always"; persistent via project permission rules.)
+- [x] Add read-only, ask, workspace-write, and trusted modes.
+- [x] Block commands targeting paths outside the workspace. (2026-08-30: `run_command` rejects path-like arguments resolving outside the root — absolute paths, `..`, `~`, `--flag=/path` values.)
+- [x] Block common destructive command patterns by default. (Blocklist extended 2026-08-30: rm against `~`/`*`/`.`/`..`/`$HOME`, `su`, `chown /`, `dd of=/dev/*`, shutdown family, `wipefs`, `curl|sh`.)
+- [x] Add network permissions and host allowlists. (Tool-level `allowedHosts` + `network:http` permission gating; every redirect hop re-validated.)
+- [x] Harden HTTP tools against SSRF and redirect bypasses. (2026-08-30: manual redirects with per-hop re-validation; encoded IPv4 literals canonicalized and privacy-checked.)
+- [ ] Protect environment variables and ignored secret files. (Partial 2026-08-30: `read_file`/`search_text` refuse secret files by default. Env-var protection still open.)
+- [ ] Redact sensitive input and output from logs. (Basic redaction exists in observability; deeper coverage open.)
+- [x] Add adversarial security tests. (2026-08-30: `packages/tools/test/security.test.ts` + `packages/cli/test/permissions-rules.test.ts`; keep extending as new tools land.)
 
 Exit condition: no file mutation, shell command, or network access occurs outside the selected policy.
 
@@ -783,20 +780,22 @@ Goal: sessions survive terminal restarts and can be inspected.
 
 Exit condition: a session can be stopped, resumed, and fully audited.
 
+Status (2026-08-30): session create/resume/delete/list landed on JSONL stores (project `.agentforge/sessions/` + global `~/.agentforge/sessions/`), with validated ids and newest-transcript restore. Still open: SQLite default store, `rename`, compaction/summaries, retention/export, and `inspect` wiring.
+
 ### Phase 7: Workflow Productization
 
 Goal: make workflows reusable and durable rather than only runtime graphs.
 
-- [ ] Define a versioned workflow schema.
-- [ ] Validate graphs before execution.
+- [x] Define a versioned workflow schema. (2026-08-30: `WorkflowDocument` v1 — plain data, behavior via named handlers + live instances; no code in documents.)
+- [x] Validate graphs before execution. (2026-08-30: `validateWorkflowDocument` with precise structural errors, handler availability checks, unreachable/start warnings; `agentforge workflows validate <file>`.)
 - [ ] Implement durable node state.
-- [ ] Implement human-approval pause and resume.
+- [ ] Implement human-approval pause and resume. (In-memory approval nodes run; durable pause/resume open.)
 - [ ] Add workflow input/output schemas.
 - [ ] Add subworkflows.
-- [ ] Add node-level retry and timeout policies.
-- [ ] Add workflow CLI execution and inspection.
-- [ ] Add workflow import/export.
-- [ ] Add deterministic workflow replay tests.
+- [x] Add node-level retry and timeout policies. (Node `retries` compiled from documents; run/node timeout policies existed.)
+- [ ] Add workflow CLI execution and inspection. (`validate` landed; execution/inspection open.)
+- [x] Add workflow import/export. (`parseWorkflowDocument`/`serializeWorkflowDocument`.)
+- [x] Add deterministic workflow replay tests. (2026-08-30: identical step histories across compilations.)
 
 Exit condition: a workflow can pause for approval, survive restart, resume, and produce a complete execution history.
 
@@ -857,6 +856,7 @@ Goal: installation no longer depends on this repository’s absolute path.
 - [x] Add release automation (`.github/workflows/release.yml`: tag `v*` → build, test, publish all packages via `NPM_AUTH_TOKEN` secret).
 - [x] Resolve npm naming: the public `@agentforge` scope is owned by a third party and the unscoped `agentforge` name is similarity-blocked, so all packages publish under the `@agentforge-oss/*` scope. The CLI installs globally as `npm i -g @agentforge-oss/cli` and still provides the `agentforge` binary.
 - [x] Publish v0.1.0 to the npm registry (2026-08-24): CLI + 9 internal packages verified live.
+- [x] Publish `0.0.2` of all `@agentforge-oss/*` packages (2026-08-31): first release on the restarted version line; tag `v0.0.2` triggers the CI release workflow (build → test → `pnpm -r publish --access public`).
 - [ ] Verify `pnpm dlx`, `npx`, and package installation behavior on clean machines.
 - [ ] Add semantic-release or Changesets-based versioning.
 - [ ] Publish migration notes for experimental API changes.
@@ -940,17 +940,17 @@ Remaining follow-ups: example smoke-test rerun and a generated-project integrati
 - [x] Add provider selection (`AGENTFORGE_PROVIDER`/`AGENTFORGE_MODEL`, `/model`, `connect`, `models list`).
 - [x] Add run/status output (per-turn footers, `doctor`, slash-command status).
 
-Still open for B-quality polish: durable named sessions/resume (Phase 6), provider streaming conformance (Phase 3), repository tools (Phase 4).
+Still open for B-quality polish: provider streaming conformance (Phase 3), context compaction (Phase 6), repository context selection (Phase 4). Durable named sessions/resume and repository tools landed after this milestone (see Milestone C and §11.5).
 
-### Milestone C: CLI Can Work on Code Safely — tool layer landed (2026-08-24)
+### Milestone C: CLI Can Work on Code Safely — tool layer + live wiring landed (2026-08-24/28)
 
 - [x] Add repository search/read tools (`list_files`, `read_file`, `search_text` in `packages/tools/src/repository.ts`; gitignore-aware, workspace-scoped, bounded reads).
 - [x] Add reviewed patch editing (`apply_patch` with dry-run validation and diff output; `inspect_git_diff` for status/diff; `packages/tools/src/editing.ts`).
 - [x] Add restricted shell/test execution (`run_command` allowlist + metacharacter/blocklist rejection; `run_tests` with package.json discovery; `packages/tools/src/command-execution.ts`).
 - [x] Add permission modes and approval policy (`packages/cli/src/permissions.ts`: read-only / ask / workspace-write / trusted, `/mode` slash command, approval-prompt hook, path-escape denial; default mode is `ask`).
 - [x] Add coding-toolset factory wiring all seven tools through the policy (`packages/cli/src/coding-tools.ts`).
-- [ ] Wire the toolset into chat sessions end to end (agent loop tool registration + TTY approval UI).
-- [ ] Add Git-aware diff summaries surfaced in chat turns.
+- [x] Wire the toolset into chat sessions end to end (live sessions run a real core Agent with the seven tools registered; `ask` mode surfaces an in-TUI approval card with y / always-this-session / n / Esc; headless contexts fail closed).
+- [x] Add Git-aware diff summaries surfaced in chat turns (project-mode turns append a one-line diff summary).
 
 Remaining Phase 4 follow-ups: token-aware context selection, `.gitignore`-driven exclusion config surface, adversarial security tests for the new tools.
 
