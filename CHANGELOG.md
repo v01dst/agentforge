@@ -4,6 +4,13 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### Device tools (Phase M — multi-project plan)
+
+- Desktop-integration tools (`packages/cli/src/devices/devices.ts`): `device_notify` (OS notification center), `device_open_url` (default browser, http/https only), `device_clipboard_write`/`device_clipboard_read`, and `device_screenshot` (captures into workspace-scoped, name-sanitized `.agentforge/screenshots/` — local-first, images never leave the machine).
+- Platform-aware command builders for darwin/linux/win32; unsupported platforms and missing utilities fail with honest errors, never fake success. All five tools carry `process:execute`, so the existing policy layer (ask prompts, trusted auto-allow, deny rules) covers them unchanged — one policy layer.
+- Registered in every coding session alongside the other coding tools.
+- Tests: 9 suites (per-platform command shapes, platform honesty, URL scheme guard, permission wiring, path sanitization); CLI suite 260 green.
+
 ### Channel adapters: webhook + Telegram (Phase L — multi-project plan)
 
 - Generic webhook channel (`agentforge channels webhook [--port 8788] [--secret <s>]`): `POST /hook` with `{ sender, text }` runs the prompt through the session runner and returns `{ reply }`. Shared-secret verification supports a plain header (`X-AgentForge-Secret`) and HMAC-SHA256 body signatures (`X-Signature: sha256=…`, timing-safe compare); missing secret means dev-mode (warned in startup output).

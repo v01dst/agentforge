@@ -23,6 +23,7 @@ import { createMemoryTool } from './memory/tool.js';
 import { createSkillManageTool, createSkillViewTool } from './skills/tools.js';
 import { createTaskTool } from './agents/task-tool.js';
 import { createLspTools } from './lsp/tools.js';
+import { createDeviceTools } from './devices/devices.js';
 
 /** Structural tool shape accepted by the workspace policy layer. */
 export type PolicyTool = Parameters<typeof applyWorkspacePolicy>[0];
@@ -98,6 +99,8 @@ export function createCodingTools(options: CodingToolsOptions = {}): PolicyTool[
   tools.push(createSkillManageTool({ root, writeApproval: options.skillWriteApproval ?? false }) as unknown as PolicyTool);
   // LSP bridge (Phase I): observe-only diagnostics + hover tools.
   for (const tool of createLspTools({ root })) tools.push(tool as unknown as PolicyTool);
+  // Device tools (Phase M): desktop integrations behind process:execute.
+  for (const tool of createDeviceTools({ root })) tools.push(tool as unknown as PolicyTool);
   if (!options.disableSubagents) {
     tools.push(createTaskTool({
       root,
