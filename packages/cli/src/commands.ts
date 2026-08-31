@@ -1079,3 +1079,40 @@ export async function profileCommand(args: string[], flags: Record<string, strin
   }
   throw new Error('Usage: agentforge profile [list|save|use|current|remove].');
 }
+
+/** Observability (Phase Q): inspect the local-first run event log. */
+export async function runsCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
+  const { readRunIndex, readRunEvents, summarizeRunEvents, pruneObservability } = await import('./observability/sink.js');
+  const [sub, runId] = args;
+  if (!sub || sub === 'list' || sub === 'ls') {
+    const index = await readRunIndex(undefined, flagBoolean(flags, 'all') ? Infinity : 20);
+    if (flagBoolean(flags, 'json')) { printJson({ runs: index }); return 0; }
+    heading('Runs (.agentforge/observability/)');
+    if (!index.length) { hint('No runs observed yet. Events land here automatically during coding sessions.'); return 0; }
+    for (const entry of index) {
+      info(`  ${entry.runId}  ${entry.status.padEnd(10)}  ${entry.startedAt}  ${Object.values(entry.counts).reduce((sum, count) => sum + count, 0)} events`);
+    }
+    return 0;
+  }
+  if (sub === 'show' || sub === 'events') {
+    if (!runId) throw new Error('Usage: agentforge runs show <runId> [--json].');
+    const events = await readRunEvents(runId);
+    if (!events) throw new Error(`No event log for run '${runId}'.`);
+    if (flagBoolean(flags, 'json')) { printJson({ runId, events }); return 0; }
+    info(summarizeRunEvents(events));
+    const verbose = flagBoolean(flags, 'verbose');
+    if (verbose) {
+      for (const event of events) info(`  ${event.timestamp}  ${event.type}  ${JSON.stringify(event.data).slice(0, 160)}`);
+    }
+    return 0;
+  }
+  if (sub === 'prune') {
+    const days = Number(flagString(flags, 'older-than-days') ?? '14');
+    if (!Number.isFinite(days) || days <= 0) throw new Error('Usage: agentforge runs prune --older-than-days <n>.');
+    const removed = await pruneObservability(days);
+    if (flagBoolean(flags, 'json')) { printJson({ removed }); return 0; }
+    success(removed.length ? `Pruned ${removed.length} run log(s) older than ${days} day(s).` : 'Nothing to prune.');
+    return 0;
+  }
+  throw new Error('Usage: agentforge runs [list|show <runId>|prune --older-than-days <n>].');
+}

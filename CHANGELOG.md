@@ -4,6 +4,12 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### Observability core (Phase Q — multi-project plan)
+
+- Local-first structured event log: every coding session writes run events (`agent.started/completed/failed`, `model.requested/completed`, `tool.started/completed/failed`, workflow events) as NDJSON under `.agentforge/observability/runs/<runId>.ndjson`, with a compacted per-run index at `index.ndjson` (status + type counts + timestamps). Doctrine-compliant: pure observation — nothing gates, nothing leaves the machine; disable with `observability: false`.
+- CLI: `agentforge runs list [--all|--json]`, `runs show <runId> [--verbose|--json]` (status, counts, duration, last tool failure), `runs prune --older-than-days <n>`.
+- Corrupt lines and torn writes are skipped on read; retention prunes stale run logs only. Tests: 6 suites; CLI suite 219 green.
+
 ### Profiles (Phase P — multi-project plan)
 
 - Named profile bundles: `~/.agentforge/profiles.json` (global) and `.agentforge/profiles.json` (project, shadows global by name). A profile pins `provider`, `model`, and optionally a `permissionMode` posture — e.g. `fast` (haiku + read-only) vs `deep` (sonnet + workspace-write).

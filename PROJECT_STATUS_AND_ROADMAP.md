@@ -992,7 +992,7 @@ data · "model-visible means logged" · one policy layer everywhere · everythin
 | Ver | Phases |
 | --- | --- |
 | 0.4.0 | A memory core ✅ · N plugin kernel + interceptor seam ✅ · B skills upgrade ✅ · C reflection ✅ · D loop upgrades ✅ · F agents/subagents ✅ · G permissions v2 ✅ |
-| 0.5.0 | H session log-as-truth + fork ✅ · I LSP bridge ✅ · P profiles ✅ · Q observability core · R security findings · T session modes |
+| 0.5.0 | H session log-as-truth + fork ✅ · I LSP bridge ✅ · P profiles ✅ · Q observability core ✅ · R security findings · T session modes |
 | 0.6.0 | J gateway serve (+OpenAI-compatible agent-as-model) · K daemon + heartbeat · S benchmarking |
 | 0.7.0 | L channel adapters (webhook + Telegram) · M device tools |
 
@@ -1077,6 +1077,12 @@ Phase P — profiles (landed):
 - [x] `agentforge profile list|save|use|current|remove` (`profile use` = env vars + posture + active flag); env vars win over profile values.
 - [x] TUI `/profile [name]` listing and activation.
 - [x] Tests: 6 suites (HOME-sandboxed); CLI suite 213 green.
+
+Phase Q — observability core (landed):
+
+- [x] `ObservabilitySink` on the session EventBus: per-run NDJSON logs + compacted index under `.agentforge/observability/`; local-first, observe-only, opt-out via `observability: false`.
+- [x] `agentforge runs list|show|prune` with `--json`/`--verbose`; corrupt-tail tolerant reads; stale-log retention.
+- [x] Tests: 6 suites; CLI suite 219 green.
 
 ## 16. Definition of “Ready to Use”
 

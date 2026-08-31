@@ -14,6 +14,7 @@ import type { AgentForgePlugin } from './plugins/plugins.js';
 import { createReflectionRuntime, type ReflectionConfig } from './reflection/review.js';
 import { createCompressionInterceptor } from './context/compression.js';
 import { createDoomLoopGuard } from './guards/doom-loop.js';
+import { ObservabilitySink } from './observability/sink.js';
 
 export interface CodingSessionOptions {
   /** Workspace root for repository tools (defaults to cwd). */
@@ -33,6 +34,8 @@ export interface CodingSessionOptions {
   reflection?: ReflectionConfig;
   /** Phase D live context compression tuning; defaults keep 96k chars / 20 recent messages. */
   compression?: { maxChars?: number; keepRecent?: number; foldTextCap?: number };
+  /** Phase Q: write structured run events to .agentforge/observability/ (default: on). */
+  observability?: boolean;
 }
 
 interface QueuedEvent {
@@ -69,6 +72,11 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
   }
 
   const events = new EventBus();
+  // Phase Q: local-first structured event log (observe-only). Disable with
+  // observability: false — nothing in the loop depends on it.
+  if (options.observability !== false) {
+    events.addSink(new ObservabilitySink(root));
+  }
   const approver = options.requestApproval ?? ((request: ApprovalRequest) => requestToolApproval(request));
   const permissionRules = readPermissionRulesSync(root);
   const codingTools: ToolLike[] = createCodingTools({
