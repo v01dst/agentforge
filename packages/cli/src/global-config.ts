@@ -107,8 +107,8 @@ export interface ActiveProviderResolution {
   source: ResolutionSource;
 }
 
-/** Resolve the active provider: env AGENTFORGE_PROVIDER → global defaultProvider → 'mock'; same ladder for model. */
-export async function resolveActiveProvider(dir = join(homedir(), '.agentforge')): Promise<ActiveProviderResolution> {
+/** Resolve the active provider: env AGENTFORGE_PROVIDER → global defaultProvider → undefined (no model configured). */
+export async function resolveActiveProvider(dir = join(homedir(), '.agentforge')): Promise<Omit<ActiveProviderResolution, 'provider'> & { provider?: string }> {
   const config = await readGlobalConfig(dir);
   if (process.env.AGENTFORGE_PROVIDER) {
     return { provider: process.env.AGENTFORGE_PROVIDER, model: process.env.AGENTFORGE_MODEL, source: 'env' };
@@ -116,7 +116,7 @@ export async function resolveActiveProvider(dir = join(homedir(), '.agentforge')
   if (config.defaultProvider) {
     return { provider: config.defaultProvider, model: process.env.AGENTFORGE_MODEL ?? config.defaultModel, source: 'global' };
   }
-  return { provider: 'mock', model: process.env.AGENTFORGE_MODEL, source: 'default' };
+  return { provider: undefined, model: process.env.AGENTFORGE_MODEL, source: 'default' };
 }
 
 /** A merged endpoint tagged with where it came from. */

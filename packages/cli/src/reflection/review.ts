@@ -60,7 +60,7 @@ export function createReflectionRuntime(options: ReflectionOptions): ReflectionR
 
   const createReviewer = (): Agent => {
     const model = options.modelInstance
-      ?? createModel({ provider: (options.provider ?? 'mock') as never, model: options.model });
+      ?? (options.provider ? createModel({ provider: options.provider as never, model: options.model }) : undefined);
     const skillManage = createSkillManageTool({ root: options.root, writeApproval: false });
     const memory = createMemoryTool({ root: options.root, global: options.memoryGlobal });
     return new Agent({

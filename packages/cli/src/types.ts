@@ -6,7 +6,7 @@ export interface NamedEntry {
 
 /** Provider selection understood by the `@agentforge-oss/models` adapters. */
 export interface ModelSelection {
-  provider: 'openai' | 'anthropic' | 'google' | 'gemini' | 'mock' | string;
+  provider: 'openai' | 'anthropic' | 'google' | 'gemini' | string;
   model?: string;
   baseUrl?: string;
 }

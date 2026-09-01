@@ -152,7 +152,6 @@ const BUILTIN_MODELS: ReadonlyArray<Omit<ModelInfoRow, 'ready' | 'source'>> = [
   { provider: 'openai', description: 'OpenAI chat completions', defaultModel: 'gpt-4o-mini', envVars: ['OPENAI_API_KEY'] },
   { provider: 'anthropic', description: 'Anthropic Messages API', defaultModel: 'claude-3-5-sonnet-latest', envVars: ['ANTHROPIC_API_KEY'] },
   { provider: 'google', description: 'Google Gemini', defaultModel: 'gemini-1.5-flash', envVars: ['GOOGLE_API_KEY', 'GEMINI_API_KEY'] },
-  { provider: 'mock', description: 'Deterministic offline provider for tests and CI', envVars: [] },
 ];
 
 const PROVIDER_ENV_HINTS: Record<string, readonly string[]> = {

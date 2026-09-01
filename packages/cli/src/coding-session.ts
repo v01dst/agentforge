@@ -58,12 +58,12 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
   const root = resolve(options.root ?? process.cwd());
   const detectedBase = detectDefaultProvider();
   const detected = {
-    provider: options.provider ?? detectedBase.provider,
-    model: options.model ?? detectedBase.model,
+    provider: options.provider ?? detectedBase?.provider,
+    model: options.model ?? detectedBase?.model,
   };
   let backing: unknown;
   if (options.modelInstance) backing = options.modelInstance;
-  else {
+  else if (detected.provider) {
     try {
       backing = createModel({ provider: detected.provider as never, model: detected.model });
     } catch {
@@ -71,8 +71,10 @@ export function buildAgentRunner(options: CodingSessionOptions = {}): TurnRunner
     }
   }
   if (!backing || typeof (backing as { generate?: unknown }).generate !== 'function') {
+    // No provider configured (mock removed in 0.8): an honest placeholder
+    // that points at ez-start. The TUI routes first-run users to onboarding.
     return async function* (input) {
-      yield { text: `[${detected.provider} unavailable] you said: ${input}` };
+      yield { text: `No model connected — run /connect (or restart for ez-start) to configure a provider. (your message: ${input.slice(0, 60)})` };
     };
   }
 

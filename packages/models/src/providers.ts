@@ -23,21 +23,6 @@ const id = (prefix: string) => `${prefix}_${Date.now().toString(36)}_${Math.rand
 const usage = (input = 0, output = 0): TokenUsage => ({ inputTokens: input, outputTokens: output, totalTokens: input + output });
 const asString = (value: unknown): string => typeof value === 'string' ? value : value == null ? '' : JSON.stringify(value);
 
-export class MockModel implements ModelProvider {
-  readonly provider = 'mock';
-  readonly model: string;
-  private index = 0;
-  constructor(private readonly options: { responses?: string[]; model?: string; toolCalls?: ToolCall[][]; latencyMs?: number } = {}) { this.model = options.model ?? 'mock-v1'; }
-  async generate(request: ModelRequest): Promise<ModelResponse> {
-    if (request.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    if (this.options.latencyMs) await new Promise((resolve) => setTimeout(resolve, this.options.latencyMs));
-    const response = this.options.responses?.[this.index % this.options.responses.length] ?? `Mock response: ${request.messages.at(-1)?.content ?? ''}`;
-    const calls = this.options.toolCalls?.[this.index]; this.index += 1;
-    return { id: id('mock'), content: response, toolCalls: calls, finishReason: calls?.length ? 'tool_calls' : 'stop', usage: usage(Math.ceil(JSON.stringify(request.messages).length / 4), Math.ceil(response.length / 4)), model: this.model };
-  }
-  async *stream(request: ModelRequest): AsyncIterable<ModelChunk> { const response = await this.generate(request); for (const token of response.content.split(/(\s+)/)) yield { id: response.id, delta: token }; yield { id: response.id, delta: '', done: true, usage: response.usage }; }
-}
-
 export class OpenAIModel implements ModelProvider {
   readonly provider = 'openai';
   readonly model: string;
@@ -260,14 +245,13 @@ export class GeminiModel implements ModelProvider {
   }
 }
 
-export interface CreateModelOptions { provider: 'openai' | 'anthropic' | 'google' | 'gemini' | 'mock' | 'openai-compatible' | 'custom' | ModelProvider; model?: string; apiKey?: string; baseUrl?: string; fetch?: typeof globalThis.fetch; responses?: string[]; }
+export interface CreateModelOptions { provider: 'openai' | 'anthropic' | 'google' | 'gemini' | 'openai-compatible' | 'custom' | ModelProvider; model?: string; apiKey?: string; baseUrl?: string; fetch?: typeof globalThis.fetch; }
 export function createModel(options: CreateModelOptions): ModelProvider {
   if (typeof options.provider !== 'string') return options.provider;
   switch (options.provider) {
     case 'openai': return new OpenAIModel(options);
     case 'anthropic': return new AnthropicModel(options);
     case 'google': case 'gemini': return new GeminiModel(options);
-    case 'mock': return new MockModel(options);
     case 'openai-compatible':
     case 'custom': {
       if (!options.baseUrl) throw new Error("The 'openai-compatible' provider requires a baseUrl (for example https://openrouter.ai/api/v1).");

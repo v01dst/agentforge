@@ -108,7 +108,6 @@ test('buildModelReport flags credential readiness and appends config entries', (
   assert.equal(byName.get('openai')?.ready, true);
   assert.equal(byName.get('anthropic')?.ready, false);
   assert.equal(byName.get('google')?.ready, false);
-  assert.equal(byName.get('mock')?.ready, true);
   const custom = byName.get('custom-provider-module');
   assert.equal(custom?.source, 'config');
   assert.equal(custom?.description, 'Local module');

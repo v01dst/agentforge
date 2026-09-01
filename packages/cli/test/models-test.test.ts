@@ -14,19 +14,6 @@ async function withTemp(fn: (root: string) => Promise<void>): Promise<void> {
   }
 }
 
-test('model probe succeeds offline against the mock provider', async () => {
-  const report = await modelProbe('mock', {});
-  assert.equal(report.ok, true);
-  assert.equal(report.provider, 'mock');
-  assert.equal(report.model, 'mock-v1');
-  assert.equal(report.finishReason, 'stop');
-  assert.ok(report.durationMs >= 0);
-  assert.ok(report.preview.length > 0);
-  // The command surfaces the same report and exits 0.
-  const exit = await modelsTestCommand(['mock'], { json: true });
-  assert.equal(exit, 0);
-});
-
 test('model probe names the missing credential for builtin providers', async () => {
   const previous = process.env.OPENAI_API_KEY;
   delete process.env.OPENAI_API_KEY;
@@ -38,7 +25,7 @@ test('model probe names the missing credential for builtin providers', async () 
 });
 
 test('model probe rejects unknown providers with guidance', async () => {
-  await assert.rejects(() => modelProbe('definitely-not-real', {}), /Known builtins: mock, openai, anthropic, google/);
+  await assert.rejects(() => modelProbe('definitely-not-real', {}), /Known builtins: openai, anthropic, google, gemini/);
 });
 
 test('model probe reports managed endpoint credential problems by variable name', async () => {

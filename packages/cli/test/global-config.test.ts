@@ -60,7 +60,7 @@ test('merge precedence: project beats global on name collision', () => {
 
 test('resolveActiveProvider env override wins over global defaults', async () => {
   const bare = await resolveActiveProvider(dir);
-  assert.deepEqual(bare, { provider: 'mock', model: undefined, source: 'default' });
+  assert.deepEqual(bare, { provider: undefined, model: undefined, source: 'default' });
   await setGlobalDefault('openai', 'gpt-4o', dir);
   const global = await resolveActiveProvider(dir);
   assert.equal(global.source, 'global');

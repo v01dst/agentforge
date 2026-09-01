@@ -173,7 +173,7 @@ async function runInteractiveChat(module: RunnableModule, config: AgentForgeConf
     baseRunner(input, signal, { skills: skillBodies(availableSkills, context.skills) });
   const instance = render(React.createElement(ChatApp, {
     runner,
-    provider: process.env.AGENTFORGE_PROVIDER ?? config.provider ?? 'mock',
+    provider: process.env.AGENTFORGE_PROVIDER ?? config.provider,
     model: process.env.AGENTFORGE_MODEL ?? resolveModelName(config.model),
     skills: availableSkills,
     extensions: {
@@ -428,14 +428,14 @@ export async function modelProbe(name: string, flags: Record<string, string | bo
       throw new Error(`Managed endpoint '${name}' needs its credential: export ${managed.apiKeyEnv} first.`);
     }
     model = createConfiguredModel({ name: managed.name, protocol: managed.protocol, model: flagString(flags, 'model') ?? managed.model, baseUrl: managed.baseUrl, apiKeyEnv: managed.apiKeyEnv }) as never;
-  } else if (['mock', 'openai', 'anthropic', 'google', 'gemini'].includes(name)) {
+  } else if (['openai', 'anthropic', 'google', 'gemini'].includes(name)) {
     try {
-      model = createModel({ provider: name as 'mock' | 'openai' | 'anthropic' | 'google', model: flagString(flags, 'model') }) as never;
+      model = createModel({ provider: name as 'openai' | 'anthropic' | 'google', model: flagString(flags, 'model') }) as never;
     } catch (error) {
       throw new Error(`${(error as Error).message} (or add a managed endpoint: agentforge providers add <name> ...)`);
     }
   } else {
-    throw new Error(`Unknown provider '${name}'. Known builtins: mock, openai, anthropic, google. Managed endpoints: agentforge providers list.`);
+    throw new Error(`Unknown provider '${name}'. Known builtins: openai, anthropic, google, gemini. Managed endpoints: agentforge providers list.`);
   }
   const prompt = flagString(flags, 'prompt') ?? 'Reply with the single word: ok';
   const started = Date.now();

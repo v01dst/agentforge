@@ -38,7 +38,7 @@ test('SettingsScreen renders providers and permission modes', async () => {
   await delay(40);
   const frame = instance.lastFrame() ?? '';
   assert.match(frame, /Session Settings/);
-  for (const provider of ['mock', 'openai', 'anthropic', 'google', 'gemini']) {
+  for (const provider of ['openai', 'anthropic', 'google', 'gemini']) {
     assert.match(frame, new RegExp(provider));
   }
   for (const mode of ['read-only', 'ask', 'workspace-write', 'trusted']) {

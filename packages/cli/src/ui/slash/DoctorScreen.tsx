@@ -135,7 +135,7 @@ export function DoctorScreen({ onBack }: { onBack?: () => void } = {}): React.Re
           dirReadable,
           configuredProviders: Array.isArray(config.providers) ? config.providers.length : 0,
           project: { found: project.found, name: project.path },
-          active: { provider: active.provider, model: active.model, source: active.source },
+          active: { provider: active.provider ?? '(none — ez-start configures one)', model: active.model, source: active.source },
         }));
       } catch (error) {
         if (alive) {

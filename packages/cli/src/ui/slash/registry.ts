@@ -638,7 +638,7 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
       usage: '/cd <path>',
       argsHint: ['directory path, ~ accepted; empty = home'],
       category: 'project',
-      run: (args) => {
+      run: async (args) => {
         const target = args[0] ? (args[0].startsWith('~') ? joinHome(args[0]) : args[0]) : homedir();
         let resolved: string;
         try {
@@ -648,16 +648,15 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
           ctx.pushSystem(`✗ /cd failed: ${(error as Error).message}`);
           return;
         }
-        void (async () => {
-          await addRecentProject(resolved);
-          const project = await detectProject(resolved);
-          ctx.pushSystem([
-            `cwd → ${resolved}`,
-            `project: ${project.found ? project.path : 'none — session mode'}`,
-            `recent projects: see ~/.agentforge/config.json`,
-          ].join('\n'));
-          ctx.refreshStatus();
-        })();
+        // Await the bookkeeping so dispatch observes the note deterministically.
+        await addRecentProject(resolved);
+        const project = await detectProject(resolved);
+        ctx.pushSystem([
+          `cwd → ${resolved}`,
+          `project: ${project.found ? project.path : 'none — session mode'}`,
+          `recent projects: see ~/.agentforge/config.json`,
+        ].join('\n'));
+        ctx.refreshStatus();
       },
     },
     {

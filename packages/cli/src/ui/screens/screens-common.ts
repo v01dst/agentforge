@@ -6,7 +6,7 @@ export interface ScreenProps {
   onBack?: () => void;
 }
 
-export const BUILTIN_PROVIDERS = ['mock', 'openai', 'anthropic', 'google', 'gemini'] as const;
+export const BUILTIN_PROVIDERS = ['openai', 'anthropic', 'google', 'gemini'] as const;
 
 export function badge(ready: boolean | null | undefined): string {
   if (ready === null || ready === undefined) return '·';

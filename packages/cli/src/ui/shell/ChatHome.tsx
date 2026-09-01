@@ -191,7 +191,7 @@ function FooterHints(): React.ReactElement {
  * Chat-first home screen: a persistent chat interface with live streaming,
  * inline slash-command suggestions above the input, and a status bar.
  */
-export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', model, activity, projectName, needsOnboarding = false, onProviderConnected, initialInput, autoResume = true, initialMessages }: ChatHomeProps) {
+export function ChatHome({ runner, commands, onSlashCommand, provider, model, activity, projectName, needsOnboarding = false, onProviderConnected, initialInput, autoResume = true, initialMessages }: ChatHomeProps) {
   const { messages, streamingText, running, status, lastError, toolEvents, send, cancel, clear, pushSystem, hydrate } = useTurn(runner);
   const sessionIdRef = useRef(newSessionId());
   const restoredRef = useRef(false);

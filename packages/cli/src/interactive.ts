@@ -31,7 +31,7 @@ export async function launchInteractiveShell(options: { initialMessages?: import
   const { readGlobalConfig } = await import('./global-config.js');
   const [contributions, globalCfg] = await Promise.all([pluginContributions(), readGlobalConfig()]);
   const pluginHooks = contributions.hooks as never;
-  const detectedProviderModel = detectDefaultProvider();
+  const detectedProviderModel = detectDefaultProvider() ?? { provider: '', model: '' };
   const reflection = {
     enabled: globalCfg.reflection?.enabled === true,
     provider: globalCfg.reflection?.provider,

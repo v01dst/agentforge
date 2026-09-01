@@ -45,7 +45,7 @@ function MessageRow({ role, text }: { role: 'user' | 'assistant' | 'system' | 't
   return <Text><Text color="cyan">agent › </Text>{text}</Text>;
 }
 
-export function ChatApp({ runner, provider = 'mock', model, skills = [], extensions, initialCommands }: ChatAppProps) {
+export function ChatApp({ runner, provider, model, skills = [], extensions, initialCommands }: ChatAppProps) {
   const { exit } = useApp();
   const { messages, streamingText, running, status, send, cancel, clear, pushSystem } = useTurn(runner);
   const [input, setInput] = useState('');

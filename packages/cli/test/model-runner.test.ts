@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectDefaultProvider, resolveModelRunner } from '../src/model-runner.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { saveCredential } from '../src/credentials.js';
+import { detectDefaultProvider, detectDefaultProviderWithCredentials, resolveModelRunner } from '../src/model-runner.js';
 
 function stripProviderEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const copy = { ...env };
@@ -8,46 +11,58 @@ function stripProviderEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   delete copy.ANTHROPIC_API_KEY;
   delete copy.GOOGLE_API_KEY;
   delete copy.GEMINI_API_KEY;
+  delete copy.AGENTFORGE_PROVIDER;
+  delete copy.AGENTFORGE_MODEL;
   return copy;
 }
 
-test('detectDefaultProvider falls back to mock when no keys present', () => {
+test('detectDefaultProvider returns undefined when nothing is configured (mock removed)', () => {
   const detected = detectDefaultProvider(stripProviderEnv(process.env));
-  assert.equal(detected.provider, 'mock');
+  assert.equal(detected, undefined);
 });
 
 test('detectDefaultProvider prefers anthropic when its key is set', () => {
-  const env = { ...stripProviderEnv(process.env), ANTHROPIC_API_KEY: 'sk-test' };
-  const detected = detectDefaultProvider(env);
-  assert.equal(detected.provider, 'anthropic');
-  assert.equal(detected.model, 'claude-sonnet-4-5');
+  const detected = detectDefaultProvider({ ...stripProviderEnv(process.env), ANTHROPIC_API_KEY: 'sk-test' });
+  assert.equal(detected!.provider, 'anthropic');
+  assert.equal(detected!.model, 'claude-opus-5');
 });
 
 test('detectDefaultProvider honors explicit AGENTFORGE_PROVIDER/MODEL over key detection', () => {
-  const env = {
+  const detected = detectDefaultProvider({
     ...stripProviderEnv(process.env),
     OPENAI_API_KEY: 'sk-test',
     AGENTFORGE_PROVIDER: 'anthropic',
     AGENTFORGE_MODEL: 'claude-3-haiku',
-  };
-  const detected = detectDefaultProvider(env);
-  assert.equal(detected.provider, 'anthropic');
-  assert.equal(detected.model, 'claude-3-haiku');
+  });
+  assert.equal(detected!.provider, 'anthropic');
+  assert.equal(detected!.model, 'claude-3-haiku');
 });
 
-test('resolveModelRunner returns a streaming runner that yields text', async () => {
-  process.env.AGENTFORGE_PROVIDER = 'mock';
+test('credential-aware detection finds stored keys without env vars', async () => {
+  const home = await mkdtemp(`${tmpdir()}/af-mr-`);
+  try {
+    await saveCredential({ env: 'ANTHROPIC_API_KEY', key: 'stored-key' }, home);
+    const detected = await detectDefaultProviderWithCredentials(stripProviderEnv(process.env), home as unknown as string);
+    assert.equal(detected!.provider, 'anthropic');
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test('resolveModelRunner returns undefined with no provider configured', async () => {
+  const home = await mkdtemp(`${tmpdir()}/af-mr2-`);
+  const previousHome = process.env.HOME;
+  const previousCwd = process.cwd();
+  process.env.HOME = home;
+  process.chdir(home); // empty home: no credentials store
   try {
     const resolved = await resolveModelRunner();
-    assert.equal(resolved.provider, 'mock');
-    assert.equal(typeof resolved.runner, 'function');
-    let text = '';
-    for await (const delta of resolved.runner('hello', new AbortController().signal, { skills: [] })) {
-      if (delta.text) text += delta.text;
-    }
-    assert.ok(text.length > 0, 'expected non-empty streamed response');
+    assert.equal(resolved, undefined);
   } finally {
-    delete process.env.AGENTFORGE_PROVIDER;
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    process.chdir(previousCwd);
+    await rm(home, { recursive: true, force: true });
   }
 });
 
@@ -55,8 +70,8 @@ test('resolveModelRunner creates an openai runner without throwing on invalid ke
   process.env.OPENAI_API_KEY = 'sk-invalid-for-test';
   try {
     const resolved = await resolveModelRunner();
-    assert.equal(resolved.provider, 'openai');
-    assert.equal(typeof resolved.runner, 'function');
+    assert.equal(resolved!.provider, 'openai');
+    assert.equal(typeof resolved!.runner, 'function');
   } finally {
     delete process.env.OPENAI_API_KEY;
   }

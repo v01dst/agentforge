@@ -1,5 +1,7 @@
 import type { TurnRunner } from './ui/turn.js';
 import { createModel } from '@agentforge-oss/models';
+import { resolveCredential } from './credentials.js';
+import type { ProviderPreset } from './providers-catalog.js';
 
 /** Structural view of a core BackingModel (CLI stays decoupled from @agentforge-oss/core). */
 interface BackingModel {
@@ -18,38 +20,61 @@ export interface ResolvedRunner {
   runner: TurnRunner;
 }
 
+/**
+ * Built-in first-party providers considered during automatic detection
+ * (0.8: mock removed — detection requires a credential from the environment
+ * or the ~/.agentforge/credentials.json store).
+ */
 const PROVIDER_PRIORITY: ReadonlyArray<{ id: string; env: string; model: string }> = [
-  { id: 'anthropic', env: 'ANTHROPIC_API_KEY', model: 'claude-sonnet-4-5' },
-  { id: 'openai', env: 'OPENAI_API_KEY', model: 'gpt-4o-mini' },
+  { id: 'anthropic', env: 'ANTHROPIC_API_KEY', model: 'claude-opus-5' },
+  { id: 'openai', env: 'OPENAI_API_KEY', model: 'gpt-5.6-sol' },
   { id: 'google', env: 'GEMINI_API_KEY', model: 'gemini-2.0-flash' },
   { id: 'google', env: 'GOOGLE_API_KEY', model: 'gemini-2.0-flash' },
 ];
 
 function guessModel(provider: string): string {
   switch (provider) {
-    case 'openai': return 'gpt-4o-mini';
-    case 'anthropic': return 'claude-sonnet-4-5';
+    case 'openai': return 'gpt-5.6-sol';
+    case 'anthropic': return 'claude-opus-5';
     case 'google': case 'gemini': return 'gemini-2.0-flash';
-    default: return 'gpt-4o-mini';
+    default: return 'gpt-5.6-sol';
   }
 }
 
 /**
- * Pick the active provider without any project configuration:
- * explicit AGENTFORGE_PROVIDER wins, otherwise the first provider with a
- * credential in the environment; otherwise the offline mock.
+ * Pick the active provider: explicit AGENTFORGE_PROVIDER wins, otherwise the
+ * first first-party provider with a credential (env → credentials store).
+ * `undefined` means nothing is configured — callers show onboarding instead
+ * of silently degrading to a fake model.
  */
-export function detectDefaultProvider(env: NodeJS.ProcessEnv = process.env): { provider: string; model: string } {
+export function detectDefaultProvider(env: NodeJS.ProcessEnv = process.env): { provider: string; model: string } | undefined {
   const explicitProvider = env.AGENTFORGE_PROVIDER;
   const explicitModel = env.AGENTFORGE_MODEL;
-  if (explicitProvider === 'mock') return { provider: 'mock', model: explicitModel ?? 'mock' };
   if (explicitProvider) {
     return { provider: explicitProvider, model: explicitModel ?? guessModel(explicitProvider) };
   }
   for (const candidate of PROVIDER_PRIORITY) {
     if (env[candidate.env]) return { provider: candidate.id, model: explicitModel ?? candidate.model };
   }
-  return { provider: 'mock', model: explicitModel ?? 'mock' };
+  return undefined;
+}
+
+/**
+ * Credential-aware detection: same ladder as `detectDefaultProvider` but also
+ * consults the credentials store synchronously-ish (best effort, async).
+ */
+export async function detectDefaultProviderWithCredentials(env: NodeJS.ProcessEnv = process.env, home?: string): Promise<{ provider: string; model: string } | undefined> {
+  const explicit = detectDefaultProvider(env);
+  if (explicit) return explicit;
+  for (const candidate of PROVIDER_PRIORITY) {
+    if (await resolveCredential(candidate.env, env, home)) return { provider: candidate.id, model: candidate.model };
+  }
+  return undefined;
+}
+
+/** Default model id for a preset-backed provider (catalog-aware guess). */
+export function defaultModelForPreset(preset: ProviderPreset): string {
+  return preset.model;
 }
 
 /** Build a streaming TurnRunner over a BackingModel (token-by-token). */
@@ -80,11 +105,14 @@ function streamViaModel(backing: BackingModel, model: string): TurnRunner {
  * Resolve a REAL streaming TurnRunner with zero project configuration:
  * provider/model come from environment detection or AGENTFORGE_* overrides,
  * and the heavy lifting is delegated to @agentforge-oss/models adapters.
+ * Returns undefined when no provider is configured — the TUI shows ez-start.
  */
-export async function resolveModelRunner(overrides?: { provider?: string; model?: string }): Promise<ResolvedRunner> {
-  const detected = detectDefaultProvider();
-  const provider = overrides?.provider ?? detected.provider;
-  const model = overrides?.model ?? detected.model;
+export async function resolveModelRunner(overrides?: { provider?: string; model?: string }): Promise<ResolvedRunner | undefined> {
+  await injectStoredCredentials();
+  const detected = await detectDefaultProviderWithCredentials();
+  const provider = overrides?.provider ?? detected?.provider;
+  const model = overrides?.model ?? detected?.model ?? guessModel(provider!);
+  if (!provider) return undefined;
 
   let backing: BackingModel | undefined;
   try {
@@ -101,4 +129,10 @@ export async function resolveModelRunner(overrides?: { provider?: string; model?
   }
 
   return { provider, model, runner: streamViaModel(backing, model) };
+}
+
+/** Fill env gaps from the credentials store (env vars always win). */
+async function injectStoredCredentials(): Promise<void> {
+  const { injectCredentialsIntoEnv } = await import('./credentials.js');
+  await injectCredentialsIntoEnv();
 }

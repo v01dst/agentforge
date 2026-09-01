@@ -74,10 +74,8 @@ async function collect(runner: ReturnType<typeof import('../src/coding-session.j
   return { text, tools };
 }
 
-test('agent runner executes repository tools end to end (mock provider)', async () => {
+test('agent runner executes repository tools end to end (injected model)', async () => {
   const root = await makeWorkspace();
-  const previousMode = process.env.AGENTFORGE_PROVIDER;
-  process.env.AGENTFORGE_PROVIDER = 'mock';
   try {
     const { buildAgentRunner } = await import('../src/coding-session.js');
     const runner = buildAgentRunner({
@@ -92,8 +90,6 @@ test('agent runner executes repository tools end to end (mock provider)', async 
     assert.equal(tools.filter((entry) => entry.state === 'done').length >= 1, true);
     assert.ok(tools.some((entry) => entry.name === 'read_file'));
   } finally {
-    if (previousMode === undefined) delete process.env.AGENTFORGE_PROVIDER;
-    else process.env.AGENTFORGE_PROVIDER = previousMode;
     await rm(root, { recursive: true, force: true });
     clearApprovals();
   }
@@ -101,7 +97,6 @@ test('agent runner executes repository tools end to end (mock provider)', async 
 
 test('read-only mode denies apply_patch without prompting', async () => {
   const root = await makeWorkspace();
-  process.env.AGENTFORGE_PROVIDER = 'mock';
   setPermissionMode('read-only');
   try {
     const agent = new Agent({
@@ -112,9 +107,8 @@ test('read-only mode denies apply_patch without prompting', async () => {
     void agent;
     const { buildAgentRunner } = await import('../src/coding-session.js');
     const runner = buildAgentRunner({ root });
-    // Drive apply_patch directly through the policy by asking for it; the mock
-    // model cannot emit tool calls, so exercise the wrapped tool via the
-    // coding session's exported test hook instead.
+    // Drive apply_patch directly through the policy by asking for it;
+    // exercise the wrapped tool via the coding session's exported test hook.
     const { createCodingTools } = await import('../src/coding-tools.js');
     const patcher = createCodingTools({ root }).find((tool) => tool.name === 'apply_patch');
     assert.ok(patcher, 'apply_patch tool exists');
