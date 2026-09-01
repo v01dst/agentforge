@@ -17,7 +17,7 @@ import { addProviderEntry, readProviderEntries, removeProviderEntry, type Provid
 import { addPermissionRule, readPermissionRules, removePermissionRule } from './permissions-store.js';
 import type { AgentForgeConfig, ChatSession, NamedEntry, ParsedCli, RunnableModule } from './types.js';
 
-export const VERSION = '0.7.1';
+export const VERSION = '0.8.0';
 
 export const HELP = `AgentForge ${VERSION}
 

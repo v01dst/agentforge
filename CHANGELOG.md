@@ -2,6 +2,19 @@
 
 All notable changes to AgentForge are documented here.
 
+## [0.8.0] — 2026-09-01
+
+### TUI redesign, ez-start, providers everywhere (0.8.0)
+
+- **TUI redesign** — the chat interface is rebuilt: messages render as blocks with role chips (`YOU` / `AGENT`) and wrapped text, tool activity is a vertical timeline (`├ ✓ read_file 12ms`), a sticky header shows live status chips (`◆ AgentForge [provider/model] [mode] [posture] [12.4k tok]`), errors are inline tinted lines, and a compact footer carries key hints. All colors flow through the existing skin system with ASCII fallback.
+- **EZ start** — first-run onboarding inside the TUI: pick a preset provider (type-to-filter), paste your API key (masked, stored in `~/.agentforge/credentials.json` with 0600 permissions — never inside a project), pick a model **fetched live from the provider's endpoint**, or define a custom provider (base URL + key + model id). Connectivity is probed honestly; failures offer retry.
+- **Provider catalog** — 16 built-in presets with model defaults verified against provider docs (2026-09): OpenAI (GPT-5.6 Sol/Terra/Luna), Anthropic (Opus 5 · Fable 5 · Sonnet 5), Google Gemini, OpenRouter, DeepSeek (V4 Flash/Pro), Groq, xAI (Grok 4.6), Mistral (Medium 3.5), Together, Fireworks, Cerebras, Moonshot (Kimi K3), Z.AI (GLM-5.3), Perplexity, plus local Ollama and LM Studio.
+- **Live model discovery** — `listProviderModels()` in `@agentforge-oss/models` fetches model ids straight from provider endpoints (`GET /models`, protocol-aware for OpenAI-compatible/Anthropic/Google), so the TUI model picker is always current; preset defaults are the fallback when a provider does not implement listing.
+- **Credentials doctrine change** — API keys entered in the CLI are stored locally in `~/.agentforge/credentials.json` (0600, home directory only); resolution order is environment → credentials file. Previously keys were env-only.
+- **Fuzzy slash search** — the slash menu now matches anywhere in command names and descriptions (ranked by the same matcher as the Ctrl-K palette): `pvdr` finds `/providers`.
+- **Everything in the TUI** — new slash passthroughs share the CLI implementations via the existing suspended-run mechanism: `/providers add|remove|test`, `/permissions allow|deny|remove`, `/skills pending|approve|reject|diff`, `/mcp`, `/findings`, `/benchmarks`, `/gateway`, `/daemon`, `/sessions-admin export|prune|delete`, `/profile save`. `/help` is now a categorized cheat-sheet generated from the live registry.
+- **Mock model deleted** — `MockModel`, the `'mock'` provider, and every fallback are removed from `@agentforge-oss/models`, the CLI, the scaffold, and onboarding. Without a configured provider the TUI shows ez-start (and headless paths state it plainly) — the agent never fakes intelligence. Tests use injected fakes (`modelInstance`) or thin scripted providers defined in the test itself.
+
 ## [0.7.1] — 2026-09-01
 
 ### License change: noncommercial + paid commercial option

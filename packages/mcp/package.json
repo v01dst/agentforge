@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-oss/mcp",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Model Context Protocol client adapters for AgentForge agents",
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",

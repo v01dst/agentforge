@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-oss/cli",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Developer CLI for AgentForge projects",
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
