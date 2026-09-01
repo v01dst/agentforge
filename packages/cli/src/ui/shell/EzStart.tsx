@@ -47,6 +47,7 @@ function visiblePresets(): readonly ProviderPreset[] {
 export function EzStart({ onComplete, onSkip }: EzStartProps): React.ReactElement {
   const [step, setStep] = useState<Step>({ kind: 'welcome' });
   const busy = useRef(false);
+  const pendingConfirm = useRef(false);
 
   useInput((value, key) => {
     if (busy.current) return;
@@ -92,7 +93,7 @@ export function EzStart({ onComplete, onSkip }: EzStartProps): React.ReactElemen
         return;
       }
       case 'model': {
-        if (step.loading) return;
+        if (step.loading) { pendingConfirm.current = true; return; }
         if (key.upArrow) { setStep({ ...step, index: Math.max(0, step.index - 1) }); return; }
         if (key.downArrow) { setStep({ ...step, index: Math.min(Math.max(step.models.length - 1, 0), step.index + 1) }); return; }
         if (key.backspace || key.delete) { setStep({ ...step, typed: step.typed.slice(0, -1), index: step.models.length }); return; }
@@ -154,9 +155,16 @@ export function EzStart({ onComplete, onSkip }: EzStartProps): React.ReactElemen
     try {
       const models = await listProviderModels({ protocol: preset.protocol, baseUrl: preset.baseUrl, apiKey });
       const ids = models.map((entry) => entry.id).slice(0, 14);
-      setStep((current) => current.kind === 'model' && current.preset.id === preset.id
-        ? { ...current, models: ids, loading: false, index: Math.max(0, ids.indexOf(preset.model)) }
-        : current);
+      const confirmQueued = pendingConfirm.current;
+      pendingConfirm.current = false;
+      let confirmed = false;
+      setStep((current) => {
+        if (current.kind !== 'model' || current.preset.id !== preset.id) return current;
+        // A confirm pressed during loading auto-saves with the preset default.
+        if (confirmQueued) { confirmed = true; }
+        return { ...current, models: ids, loading: false, index: Math.max(0, ids.indexOf(preset.model)) };
+      });
+      if (confirmed) void save(preset.id, preset, preset.model);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setStep((current) => current.kind === 'model' && current.preset.id === preset.id

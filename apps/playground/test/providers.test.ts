@@ -4,9 +4,10 @@ import { resolveRequestedModel, SUPPORTED_PROTOCOLS } from '../lib/providers';
 const env = (values: Record<string, string>) => ({ ...values } as NodeJS.ProcessEnv);
 
 describe('playground model selection', () => {
-  it('defaults to the deterministic mock provider', () => {
+  it('requires an explicit provider (mock removed in 0.8)', () => {
     const result = resolveRequestedModel({});
-    expect('model' in result && result.model.provider).toBe('mock');
+    expect('error' in result).toBe(true);
+    if ('error' in result) expect(result.error).toContain('No provider selected');
   });
 
   it('rejects unknown providers with available options', () => {

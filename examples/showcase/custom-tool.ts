@@ -1,7 +1,7 @@
 import { Agent } from '@agentforge-oss/core';
-import { MockModel } from '@agentforge-oss/models';
 import { defineTool } from '@agentforge-oss/tools';
 import { z } from 'zod';
+import { ScriptedModel } from './demo-model.js';
 
 const inventory = defineTool({
   name: 'inventory_lookup',
@@ -13,10 +13,10 @@ const inventory = defineTool({
 
 export const agent = new Agent({
   name: 'inventory-agent',
-  model: new MockModel({
-    responses: ['', 'AF-001 is available.'],
-    toolCalls: [[{ id: 'lookup-1', name: 'inventory_lookup', arguments: { sku: 'AF-001' } }]],
-  }),
+  model: new ScriptedModel([
+    { toolCalls: [{ id: 'lookup-1', name: 'inventory_lookup', arguments: { sku: 'AF-001' } }] },
+    { content: 'AF-001 is available.' },
+  ]),
   tools: [inventory],
 });
 

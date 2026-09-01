@@ -1,8 +1,8 @@
 import type { ModelProvider } from '@agentforge-oss/core';
-import { MockModel, createConfiguredModel, isProviderReady, type ProviderDefinition } from '@agentforge-oss/models';
+import { createConfiguredModel, isProviderReady, type ProviderDefinition } from '@agentforge-oss/models';
 
 export interface ModelSelectionRequest {
-  /** Provider protocol: mock (default) | openai | anthropic | google | gemini | openai-compatible */
+  /** Provider protocol: openai | anthropic | google | gemini | openai-compatible (mock removed in 0.8) */
   provider?: string;
   model?: string;
   /** Endpoint override; required for openai-compatible. */
@@ -26,12 +26,12 @@ const DEFAULT_KEY_ENV_HINTS: Record<string, string> = {
  * through the request body — only environment variable names.
  */
 export function resolveRequestedModel(body: ModelSelectionRequest, env: NodeJS.ProcessEnv = process.env): { model: ModelProvider } | { error: string } {
-  const provider = body.provider ?? 'mock';
-  if (provider === 'mock' || provider === '') {
-    return { model: new MockModel({ model: body.model }) };
+  const provider = body.provider ?? '';
+  if (!provider) {
+    return { error: `No provider selected. Available providers: ${SUPPORTED_PROTOCOLS.join(', ')} (configure credentials in the server environment).` };
   }
   if (!SUPPORTED_PROTOCOLS.includes(provider)) {
-    return { error: `Unsupported provider '${provider}'. Available providers: mock, ${SUPPORTED_PROTOCOLS.join(', ')}.` };
+    return { error: `Unsupported provider '${provider}'. Available providers: ${SUPPORTED_PROTOCOLS.join(', ')}.` };
   }
   const definition: ProviderDefinition = {
     name: provider,

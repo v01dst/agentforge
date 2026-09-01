@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as RunRequest;
   } catch {
-    // An empty body is valid and uses the mock provider.
+    // An empty body is invalid now — a provider must be selected.
   }
 
   const requested = resolveRequestedModel(body);
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
       output: result.output,
       startedAt,
       completedAt,
-      metadata: { provider: body.provider ?? 'mock', model: body.model ?? 'default', durationMs: result.durationMs },
+      metadata: { provider: body.provider ?? 'unknown', model: body.model ?? 'default', durationMs: result.durationMs },
     });
     return NextResponse.json({
       runId: result.runId,

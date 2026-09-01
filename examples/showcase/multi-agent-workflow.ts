@@ -1,9 +1,9 @@
 import { Agent } from '@agentforge-oss/core';
-import { MockModel } from '@agentforge-oss/models';
 import { WorkflowBuilder, agentNode, inputNode, outputNode } from '@agentforge-oss/workflows';
+import { ScriptedModel } from './demo-model.js';
 
-const researcher = new Agent({ name: 'researcher', model: new MockModel({ responses: ['Typed tools reduce invalid calls.'] }) });
-const editor = new Agent({ name: 'editor', model: new MockModel({ responses: ['Summary: typed tools make agent execution more reliable.'] }) });
+const researcher = new Agent({ name: 'researcher', model: new ScriptedModel([{ content: 'Typed tools reduce invalid calls.' }]) });
+const editor = new Agent({ name: 'editor', model: new ScriptedModel([{ content: 'Summary: typed tools make agent execution more reliable.' }]) });
 
 export const workflow = new WorkflowBuilder('multi-agent')
   .add(inputNode('input'))

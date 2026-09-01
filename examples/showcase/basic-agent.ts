@@ -1,9 +1,9 @@
 import { Agent } from '@agentforge-oss/core';
-import { MockModel } from '@agentforge-oss/models';
+import { ScriptedModel } from './demo-model.js';
 
 export const agent = new Agent({
   name: 'concierge',
-  model: new MockModel({ responses: ['AgentForge is ready.'] }),
+  model: new ScriptedModel([{ content: 'AgentForge is ready.' }]),
   instructions: 'Answer concisely and report uncertainty.',
 });
 

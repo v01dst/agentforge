@@ -55,14 +55,23 @@ test('EzStart preset flow: filter, pick DeepSeek, masked key, model from endpoin
       assert.match(maskedFrame, /•+/, 'key entry is masked with bullets');
       assert.ok(!maskedFrame.includes('sk-ds-secret'), 'raw key is never rendered');
       instance.stdin.write('\r'); // submit key → endpoint fetch
-      await delay(120); // fetch settles, model list renders
-      let frame = instance.lastFrame() ?? '';
+      // Poll until the model PICKER renders ('↑/↓ pick' only shows when the
+      // fetched list resolved — the loading frame shows the typed default too).
+      let frame = '';
+      for (let i = 0; i < 40; i += 1) {
+        await delay(50);
+        frame = instance.lastFrame() ?? '';
+        if (frame.includes('↑/↓ pick')) break;
+      }
       assert.match(frame, /deepseek-v4-flash/, 'fetched model list rendered');
       assert.ok(!frame.includes('sk-ds-secret'), 'raw key is never rendered');
       // deepseek-v4-flash is preselected (preset default position); enter confirms.
       instance.stdin.write('\r');
-      await delay(80);
-      frame = instance.lastFrame() ?? '';
+      for (let i = 0; i < 40; i += 1) {
+        await delay(50);
+        frame = instance.lastFrame() ?? '';
+        if (frame.includes('ready')) break;
+      }
       assert.match(frame, /ready/, 'done state rendered');
       instance.unmount();
 
@@ -120,9 +129,13 @@ test('EzStart custom flow: name → base URL → key → model id → saved', as
       instance.stdin.write('glm-5.3'); // model id field (4/4)
       await delay(60);
       instance.stdin.write('\r'); // save directly
-      await delay(200);
-      const frame = instance.lastFrame() ?? '';
-      assert.match(frame, /my-gateway ready \(glm-5.3\)/);
+      let frame = '';
+      for (let i = 0; i < 40; i += 1) {
+        await delay(50);
+        frame = instance.lastFrame() ?? '';
+        if (frame.includes('my-gateway ready (glm-5.3)')) break;
+      }
+      assert.match(frame, /my-gateway ready \(glm-5\.3\)/);
       instance.unmount();
       const providers = JSON.parse(await readFile(join(project, '.agentforge', 'providers.json'), 'utf8')) as { providers: Array<{ name: string; baseUrl?: string; apiKeyEnv?: string }> };
       assert.equal(providers.providers[0]!.name, 'my-gateway');
