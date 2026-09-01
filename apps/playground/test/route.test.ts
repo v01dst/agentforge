@@ -54,15 +54,26 @@ afterAll(async () => {
 });
 
 describe('playground runs API', () => {
-  it('runs the default workflow through the mock provider and persists it', async () => {
-    const { status, body } = await post({ input: { topic: 'mock smoke' } });
+  it('rejects a run without a selected provider (mock removed in 0.8)', async () => {
+    const { status, body } = await post({ input: { topic: 'no provider' } });
+    expect(status).toBe(400);
+    expect(String(body.error)).toContain('No provider selected');
+  });
+
+  it('persists a completed run to the store', async () => {
+    const { status, body } = await post({
+      provider: 'openai-compatible',
+      baseUrl: `http://127.0.0.1:${stubPort}/v1`,
+      model: 'stub-model-7b',
+      apiKeyEnv: 'STUB_KEY',
+      input: { topic: 'stored run smoke' },
+    });
     expect(status).toBe(200);
     expect(String(body.runId)).toMatch(/^workflow_/);
-    expect(String(body.output)).toContain('Mock response:');
     const history = await GET();
     const data = (await history.json()) as { runs: Array<{ id: string; input?: unknown }> };
     const stored = data.runs.find((run) => run.id === body.runId);
-    expect(stored?.input).toBe('mock smoke');
+    expect(stored?.input).toBe('stored run smoke');
   });
 
   it('routes openai-compatible requests to the configured endpoint using env credentials', async () => {
