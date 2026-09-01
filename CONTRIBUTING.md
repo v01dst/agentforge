@@ -22,4 +22,4 @@ Thanks for helping improve AgentForge. The repository is a pnpm/Turborepo monore
 
 Describe the problem, the behavioral change, and how it was tested. Include screenshots for playground changes and call out experimental APIs. Keep generated lockfile changes limited to dependency updates.
 
-By contributing, you agree that your work is provided under the repository's Apache License 2.0.
+By contributing, you agree that your work is provided under the repository's PolyForm Noncommercial License 1.0.0 (with the commercial-licensing option described in LICENSE). Contributions you submit may also be used in commercially licensed versions of AgentForge.

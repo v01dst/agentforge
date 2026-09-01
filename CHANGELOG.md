@@ -2,6 +2,14 @@
 
 All notable changes to AgentForge are documented here.
 
+## [0.7.1] — 2026-09-01
+
+### License change: noncommercial + paid commercial option
+
+- AgentForge is relicensed from Apache-2.0 to **PolyForm Noncommercial 1.0.0** across all packages: free use, study, modification, and redistribution for noncommercial purposes (personal, research, education, charitable organizations).
+- **Commercial use now requires a paid license** — company products, internal business tooling, consulting, or any revenue-generating activity is outside the free grant. Commercial terms are available from the licensor (see README "License" and the commercial-licensing preamble in `LICENSE`).
+- All 12 `package.json` `license` fields updated to `PolyForm-Noncommercial-1.0.0`; CONTRIBUTING.md contribution terms updated to match.
+
 ## [0.7.0] — 2026-08-31
 
 Feature wave four (multi-project adoption plan, phases L, M) — completes the six-project adoption plan.

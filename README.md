@@ -6,14 +6,14 @@
 
 **A model-agnostic agent runtime, terminal coding agent, and extension platform — in one TypeScript monorepo.**
 
-[![version](https://img.shields.io/badge/version-0.0.2-818cf8)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.7.0-818cf8)](CHANGELOG.md)
 [![node](https://img.shields.io/badge/node-%E2%89%A520.11-339933?logo=node.js&logoColor=white)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-9-F69220?logo=pnpm&logoColor=white)](pnpm-workspace.yaml)
-[![license](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
+[![license](https://img.shields.io/badge/license-noncommercial%20%2B%20commercial-orange)](LICENSE)
 [![tests](https://img.shields.io/badge/tests-passing-brightgreen)](.github/workflows)
 [![discord](https://img.shields.io/badge/discord-9p.1-5865F2?logo=discord&logoColor=white)](#-community)
 
-*Chat-first TUI · provider streaming · permission-gated coding tools · durable sessions · workflow documents · plugins · MCP · skills*
+*Chat-first TUI · subagents & task delegation · skills with staging · persistent memory · LSP intelligence · structured permission rules · session modes · observability & security findings · OpenAI-compatible gateway · daemon · channels · device tools · workflows · plugins · MCP*
 
 </div>
 
@@ -49,7 +49,7 @@ Packages ship to npm under the `@agentforge-oss` scope — the CLI installs glob
 
 ```bash
 npm install -g @agentforge-oss/cli
-agentforge --version          # v0.0.2
+agentforge --version          # v0.7.0
 
 # or run it without installing
 npx @agentforge-oss/cli chat
@@ -100,13 +100,19 @@ agentforge            # chat-first TUI (global mode, or project mode in a repo)
 agentforge chat       # explicit interactive session (--plain for pipes/CI)
 agentforge run        # one headless turn — perfect for scripting
 agentforge doctor     # environment, config, plugins, MCP — with security surfacing
-agentforge models list
-agentforge models test openrouter   # one-shot provider connectivity probe
-agentforge providers add <name> --protocol openai-compatible --base-url …
-agentforge sessions list|resume|rename|export|prune
-agentforge permissions allow|deny <tool>
-agentforge workflows validate <file.json>
-agentforge inspect <run-id>         # runs — or stored sessions with --session
+agentforge models list && agentforge models test openrouter
+agentforge sessions list|resume|rename|export|prune|fork|transcript
+agentforge agents list                # markdown agent definitions + built-in subagents
+agentforge skills list|pending|diff|approve|reject
+agentforge permissions allow run_command --prefix "git status"
+agentforge profile save deep --provider anthropic --model claude-sonnet --mode workspace-write
+agentforge runs list|show <runId>     # local-first run event log
+agentforge findings list              # observe-only security findings
+agentforge benchmarks list|run --all  # deterministic scoring — no model judges
+agentforge gateway serve              # OpenAI-compatible endpoint over your agent
+agentforge daemon run|status|stop|install
+agentforge channels webhook|telegram  # bring chat to the agent
+agentforge inspect <run-id>           # runs — or stored sessions with --session
 ```
 
 Inside a session:
@@ -115,10 +121,13 @@ Inside a session:
 | --- | --- |
 | `/help` `/status` `/clear` `/exit` | session basics |
 | `/models` `/model <name>` `/providers` `/connect <p>` | switch models mid-flight |
-| `/tools` `/workflows` `/runs` `/inspect <id>` | inspect what the agent can do and did |
-| `/mode [read-only\|ask\|workspace-write\|trusted]` | permission posture for edits & commands |
-| `/rename <title>` `/show [id]` `/sessions` `/resume [id]` `/new` | durable session control |
-| `/plugins` `/skills` `/skin [name]` | browse extensions and themes |
+| `/mode [chat\|build\|indie\|automode]` | **session mode** — how the agent behaves |
+| `/permissions [read-only\|ask\|workspace-write\|trusted]` (alias `/posture`) | **posture** — what needs approval |
+| `/plan` `/build` | quick posture switches (read-only ↔ workspace-write) |
+| `/memory` `/skills [name]` `/agents` | browse memory, skills, and agents |
+| `/fork [id]` `/transcript [id]` `/rename` `/show` `/sessions` `/resume` `/new` | durable session control — fork replays the full uncompacted log |
+| `/profile [name]` | apply a saved provider/model/posture bundle |
+| `/tools` `/workflows` `/runs` `/inspect <id>` `/plugins` `/skin` | inspect what the agent can do and did |
 
 Streaming turns show live token output and SSE streaming from every HTTP provider (OpenAI, Anthropic, Gemini, OpenAI-compatible). Long sessions compact automatically to a recent tail plus a rolling summary. Ctrl-C cancels the current turn, twice exits. Tool calls render inline as they complete. Non-TTY usage degrades to clean plain-text (pipes, CI, `echo "hi" | agentforge chat`).
 
@@ -205,9 +214,27 @@ Credentials never touch disk through the CLI, API keys are redacted from logs an
 and provider credentials resolve from environment variables only. Hardening beyond the modes:
 
 - **Per-tool rules** — `agentforge permissions deny <tool>` blocks a tool in every mode; `allow` skips its approval prompt. Rules live in `.agentforge/permissions.json` and never bypass workspace path checks.
+- **Structured rules (v0.6)** — glob patterns (`mcp.*`), dotted hierarchies (`mcp.server` covers `mcp.server.tool`), command prefixes (`run_command:prefix=git status` carves exceptions out of a broad deny), and `external_directory:` grants. Specificity tiers with deny-precedence; unknown qualifiers fail closed.
 - **Secret-file protection** — `read_file`/`search_text` refuse `.env`, key files, `id_rsa`, `.ssh/` and friends unless explicitly opted in.
 - **Command containment** — `run_command` is allowlist-only, shell-free, rejects path arguments escaping the workspace, and blocks destructive patterns (`rm -rf ~`, `dd of=/dev/*`, `curl | sh`, …).
 - **SSRF-safe HTTP** — redirects are followed manually with every hop re-validated against private-network blocks and host allowlists (including encoded-IP tricks).
+- **Doom-loop guard** — a `preTool` interceptor denies the third identical consecutive tool call and tells the model to change approach instead of burning context.
+
+## Power features
+
+Everything below ships in the CLI — no extra installs, all local-first:
+
+- **Subagents & task delegation** — markdown agent definitions in `.agentforge/agents/` (frontmatter: `mode`, `description`, `model`, `steps`, `permission`). The `task` tool spawns child agent runs with posture-filtered toolsets; built-in `explore` (read-only) and `general` subagents; `@mention` hints in chat; `/agents` browser.
+- **Skills with staging** — folders with `SKILL.md` + reference files load progressively (index in context, bodies on demand). Agent-authored skill writes are staged under `.agentforge/pending/skills/` and land only after human `approve`.
+- **Persistent memory & persona** — `MEMORY.md` / `USER.md` with capacity accounting, the `memory` tool, and `.agentforge/SOUL.md` + `AGENTS.md` injected as a frozen snapshot at session start.
+- **LSP intelligence** — a real JSON-RPC stdio client (TS-first: `typescript-language-server` by default; custom servers in `.agentforge/lsp.json`). `lsp_diagnostics` and `lsp_hover` as observe-only tools.
+- **Session log-as-truth** — every turn appends to an NDJSON log that compaction never touches; `sessions fork` replays full history into a new session with `forkedFrom` lineage.
+- **Observability & security findings** — structured run events under `.agentforge/observability/` (`agentforge runs show <id>`), plus a deterministic findings scanner that records secret-shaped inputs, risky shell patterns, and credential-file probes — **observe-only, never gates**.
+- **OpenAI-compatible gateway** — `agentforge gateway serve` exposes your agent at `POST /v1/chat/completions` (SSE streaming included); any OpenAI-protocol client can talk to it.
+- **Daemon** — `agentforge daemon run` heartbeats and drains JSON job files; `install` writes a supervised launchd/systemd unit; `status`/`stop` included.
+- **Channels** — `agentforge channels webhook` (HMAC-verified `POST /hook`) and `channels telegram` (long-polling bot with chat allowlist) pipe external chat into the agent.
+- **Device tools** — `device_notify`, `device_open_url`, clipboard read/write, and `device_screenshot`, all behind `process:execute` so the policy layer covers them.
+- **Profiles & modes** — `profile save deep --provider anthropic --model claude-sonnet --mode workspace-write` then `profile use deep`; session modes (`chat`/`build`/`indie`/`automode`) layer behavior on top of postures.
 
 ## Workflows as documents
 
@@ -308,12 +335,14 @@ for PR expectations. The roadmap is maintained as a truthful status document —
 
 ## Status
 
-AgentForge **v0.0.2** is an experimental foundation that already does real work:
-multi-turn streaming chat with durable sessions (rename/export/prune/compaction), repository-aware
-tools behind per-tool permission rules, SSE provider streaming with conformance fixtures,
-`models test` probes, plugins/MCP/skills, versioned workflow documents, run inspection, and a
-playground — verified by ~257 deterministic tests. Not yet production-stable; APIs may change
-before `0.1`.
+AgentForge **v0.7.0** completes the multi-project adoption plan (four feature waves, 15 phases):
+persistent memory, an interceptor seam with a v2 plugin kernel, staged skills, observe-only
+reflection, prompt caching + live context compression, markdown agents with `task` delegation,
+structured permission rules with a doom-loop guard, NDJSON session logs with forking, an LSP
+bridge, profiles, a local-first observability core, security findings, session modes, an
+OpenAI-compatible gateway, a supervised daemon, deterministic benchmarks, webhook/Telegram
+channels, and desktop device tools — verified by ~290 deterministic tests. Experimental but
+hard at work; APIs may still change before 1.0.
 
 See [CHANGELOG.md](CHANGELOG.md) for the release history and
 [PROJECT_STATUS_AND_ROADMAP.md](PROJECT_STATUS_AND_ROADMAP.md) for the honest gap list.
@@ -325,4 +354,12 @@ See [CHANGELOG.md](CHANGELOG.md) for the release history and
 
 ## License
 
-[Apache-2.0](LICENSE)
+AgentForge is free for **noncommercial** use under the
+[PolyForm Noncommercial 1.0.0](LICENSE) license: personal projects, research, education,
+and charitable/public-interest organizations — no payment, no permission needed.
+
+**Commercial use requires a paid license.** Using AgentForge for business purposes — in
+company products, internal tooling, consulting, or anything that generates revenue — needs
+a commercial license. Open a licensing inquiry at
+[github.com/v01dst/agentforge/issues](https://github.com/v01dst/agentforge/issues) to get
+commercial terms. The full terms are in [LICENSE](LICENSE).
