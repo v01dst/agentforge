@@ -150,10 +150,32 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
     },
     {
       name: 'providers',
-      description: 'Open the Models & Providers manager',
-      usage: '/providers',
+      description: 'Providers manager — /providers add|remove|test <name>, or open the manager screen',
+      usage: '/providers [add|remove|test] [name]',
+      argsHint: ['action', 'name'],
       category: 'config',
-      run: () => ctx.openScreen('models'),
+      run: async (args, cmdCtx) => {
+        const [action, name] = args;
+        if (!action) {
+          ctx.openScreen('models');
+          return;
+        }
+        if (action === 'add') {
+          // EzStart-style guided add, inline: name → preset or custom.
+          await ctx.runSuspended(() => cliCommands.providers(['add', ...args.slice(1)]));
+          cmdCtx.pushSystem('provider saved — /models or /providers lists it; keys live in ~/.agentforge/credentials.json');
+          return;
+        }
+        if (action === 'remove' || action === 'test') {
+          await ctx.runSuspended(() => cliCommands.providers(args));
+          cmdCtx.pushSystem(`provider ${action} done`);
+          return;
+        }
+        if (!name) {
+          cmdCtx.pushSystem('usage: /providers add <name> --base-url <url> --model <id> [--api-key-env VAR] · /providers remove <name> · /providers test <name>');
+          return;
+        }
+      },
     },
     {
       name: 'models',
@@ -195,10 +217,24 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
     },
     {
       name: 'skills',
-      description: 'List project + global skills',
-      usage: '/skills',
+      description: 'List project + global skills — /skills approve|reject|diff for staged writes',
+      usage: '/skills [name | pending|approve|reject|diff [id]]',
       category: 'resources',
-      run: () => ctx.openScreen('skills'),
+      run: async (args, cmdCtx) => {
+        const first = args[0];
+        if (!first) {
+          ctx.openScreen('skills');
+          return;
+        }
+        if (['pending', 'approve', 'reject', 'diff'].includes(first)) {
+          await ctx.runSuspended(() => cliCommands.skillsAdmin(['skills', ...args]));
+          cmdCtx.pushSystem('skill review done — staged writes landed or were rejected');
+          return;
+        }
+        // Toggle behavior for a named skill stays inline (fast path).
+        await ctx.runSuspended(() => cliCommands.skillsAdmin(['skills', ...args]));
+        cmdCtx.pushSystem(`skill command done for '${first}'`);
+      },
     },
     {
       name: 'plugins',
@@ -303,16 +339,27 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
     },
     {
       name: 'profile',
-      description: 'Apply a saved profile (provider/model/posture bundle)',
-      usage: '/profile [name]',
-      argsHint: ['name'],
+      description: 'Apply a saved profile, or save the current session as one: /profile save <name>',
+      usage: '/profile [name | save <name> --provider <p> --model <m> --mode <posture>]',
+      argsHint: ['name or save'],
       category: 'config',
       run: async (args, cmdCtx) => {
         const { listProfiles, getProfile, activeProfileName, setActiveProfile, resolveProfileToEnvValues } = await import('../../profiles/profiles.js');
         const name = args[0];
+        if (name === 'save') {
+          const { saveProfile } = await import('../../profiles/profiles.js');
+          const saveName = args[1];
+          if (!saveName) { cmdCtx.pushSystem('usage: /profile save <name> [--provider <p>] [--model <m>] [--mode <posture>]'); return; }
+          const provider = args.includes('--provider') ? args[args.indexOf('--provider') + 1] : undefined;
+          const model = args.includes('--model') ? args[args.indexOf('--model') + 1] : undefined;
+          const mode = args.includes('--mode') ? args[args.indexOf('--mode') + 1] : undefined;
+          await saveProfile({ name: saveName, provider, model, permissionMode: mode as never });
+          cmdCtx.pushSystem(`profile '${saveName}' saved — /profile ${saveName} activates it`);
+          return;
+        }
         if (!name) {
           const [profiles, active] = await Promise.all([listProfiles(), activeProfileName()]);
-          if (!profiles.length) { cmdCtx.pushSystem('no profiles saved — create one with: agentforge profile save <name> --provider <p> --model <m>'); return; }
+          if (!profiles.length) { cmdCtx.pushSystem('no profiles saved — /profile save <name> creates one from the current session'); return; }
           cmdCtx.pushSystem(['profiles:', ...profiles.map((profile) => `  ${profile.name}${profile.name === active ? ' [active]' : ''}  ${[profile.provider, profile.model].filter(Boolean).join('/') || '(session defaults)'}${profile.permissionMode ? ` · ${profile.permissionMode}` : ''}`)].join('\n'));
           return;
         }
@@ -458,6 +505,113 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
       usage: '/version',
       category: 'system',
       run: () => ctx.pushSystem(`AgentForge ${VERSION}`),
+    },
+    {
+      name: 'permissions',
+      description: 'Posture (read-only|ask|workspace-write|trusted) or rule management: /permissions allow|deny|remove <tool>',
+      usage: '/permissions [posture | allow|deny|remove <tool>]',
+      aliases: ['posture'],
+      argsHint: ['posture or rule action'],
+      category: 'config',
+      run: async (args, cmdCtx) => {
+        const first = args[0];
+        const { PERMISSION_MODES, currentPermissionMode, setPermissionMode } = await import('../../permissions.js');
+        if (!first) {
+          cmdCtx.pushSystem(`permission posture: ${currentPermissionMode()} — postures: ${PERMISSION_MODES.join(' | ')} · rule management: /permissions allow|deny|remove <tool>`);
+          return;
+        }
+        if (PERMISSION_MODES.includes(first as never)) {
+          setPermissionMode(first as never);
+          cmdCtx.refreshStatus();
+          cmdCtx.pushSystem(`permission posture: ${first}`);
+          return;
+        }
+        // Rule management: delegate to the CLI implementation.
+        await ctx.runSuspended(() => cliCommands.permissions(args));
+        cmdCtx.pushSystem('permission rules updated — see .agentforge/permissions.json');
+      },
+    },
+    {
+      name: 'skills-admin',
+      description: 'Skill review flow: pending staged writes, diff, approve, reject',
+      usage: '/skills-admin [pending|diff|approve|reject] [id]',
+      aliases: ['skillreview'],
+      argsHint: ['action', 'id'],
+      category: 'resources',
+      run: async (args, cmdCtx) => {
+        const action = args[0] ?? 'pending';
+        await ctx.runSuspended(() => cliCommands.skillsAdmin([action, ...args.slice(1)]));
+        cmdCtx.pushSystem('skill review done — /skills refreshes the list');
+      },
+    },
+    {
+      name: 'mcp',
+      description: 'MCP servers: list, add, remove, tools',
+      usage: '/mcp [list|add|remove|tools] …',
+      argsHint: ['action'],
+      category: 'resources',
+      run: async (args, cmdCtx) => {
+        await ctx.runSuspended(() => cliCommands.mcp(args.length ? args : ['list']));
+        cmdCtx.pushSystem('mcp command done — /tools shows adapted tools');
+      },
+    },
+    {
+      name: 'findings',
+      description: 'Observe-only security findings from tool activity',
+      usage: '/findings [list|clear]',
+      category: 'system',
+      run: async (args, cmdCtx) => {
+        await ctx.runSuspended(() => cliCommands.findings(args.length ? args : ['list']));
+        cmdCtx.pushSystem('findings view closed — findings never gate execution');
+      },
+    },
+    {
+      name: 'benchmarks',
+      description: 'Deterministic benchmarks: list, run, results',
+      usage: '/benchmarks [list|run <id>|results]',
+      argsHint: ['action', 'id'],
+      category: 'system',
+      run: async (args, cmdCtx) => {
+        await ctx.runSuspended(() => cliCommands.benchmarks(args.length ? args : ['list']));
+        cmdCtx.pushSystem('benchmarks view closed — results in .agentforge/benchmarks/');
+      },
+    },
+    {
+      name: 'gateway',
+      description: 'Serve an OpenAI-compatible endpoint over this agent (blocks until Ctrl-C)',
+      usage: '/gateway serve [--port <n>]',
+      argsHint: ['serve'],
+      category: 'system',
+      run: async (args, cmdCtx) => {
+        await ctx.runSuspended(() => cliCommands.gateway(args.length ? args : ['serve']));
+        cmdCtx.pushSystem('gateway stopped');
+      },
+    },
+    {
+      name: 'daemon',
+      description: 'Heartbeat daemon: run (blocks), status, stop, install',
+      usage: '/daemon [run|status|stop|install]',
+      argsHint: ['action'],
+      category: 'system',
+      run: async (args, cmdCtx) => {
+        await ctx.runSuspended(() => cliCommands.daemon(args.length ? args : ['status']));
+        cmdCtx.pushSystem('daemon command done');
+      },
+    },
+    {
+      name: 'sessions-admin',
+      description: 'Session maintenance: export, prune, delete',
+      usage: '/sessions-admin [export|prune|delete] …',
+      argsHint: ['action'],
+      category: 'project',
+      run: async (args, cmdCtx) => {
+        if (!args.length) {
+          cmdCtx.pushSystem('usage: /sessions-admin export <id> [--format md|json] · prune --older-than-days <n> · delete <id>');
+          return;
+        }
+        await ctx.runSuspended(() => cliCommands.sessions(args));
+        cmdCtx.pushSystem('sessions command done');
+      },
     },
     {
       name: 'reload',
@@ -648,3 +802,16 @@ export function commandCatalog(): CommandCatalogEntry[] {
     category: entry.category,
   }));
 }
+
+/** Lazy import map for CLI command implementations used by slash passthroughs (0.8 T). */
+const cliCommands = {
+  providers: (args: string[]): Promise<number> => import('../../commands.js').then((m) => m.providersCommand(args, {})),
+  permissions: (args: string[]): Promise<number> => import('../../commands.js').then((m) => m.permissionsCommand(args, {})),
+  skillsAdmin: (args: string[]): Promise<number> => import('../../commands.js').then((m) => m.skillsCommand(args, {})),
+  mcp: (args: string[]): Promise<number> => import('../../commands.js').then((m) => m.mcpCommand(args, {})),
+  findings: (args: string[]): Promise<number> => import('../../commands.js').then((m) => m.findingsCommand(args, {})),
+  benchmarks: (args: string[]): Promise<number> => import('../../commands.js').then((m) => m.benchmarksCommand(args, {})),
+  gateway: (args: string[]): Promise<number> => import('../../commands.js').then((m) => m.gatewayCommand(args, {})),
+  daemon: (args: string[]): Promise<number> => import('../../commands.js').then((m) => m.daemonCommand(args, {})),
+  sessions: (args: string[]): Promise<number> => import('../../commands.js').then((m) => m.sessionsCommand(args, {})),
+} as const;
