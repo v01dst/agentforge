@@ -64,8 +64,10 @@ test('normal text + Enter sends a turn and shows user + assistant messages', asy
   instance.stdin.write('\r');
   await delay(150);
   const frame = instance.lastFrame() ?? '';
-  assert.match(frame, /you › hello agent/);
+  assert.match(frame, /YOU/);
+  assert.match(frame, /hello agent/);
   assert.match(frame, /reply-to:hello agent/);
+  assert.match(frame, /AGENT/);
   assert.match(frame, /7 tok/);
   instance.unmount();
 });
@@ -157,7 +159,7 @@ test('tool-role messages render as dim tool-call lines with duration', async () 
   instance.stdin.write('\r');
   await delay(200);
   const frame = instance.lastFrame() ?? '';
-  assert.match(frame, /web_search \(1200ms\)/);
+  assert.match(frame, /web_search\s+1200ms/);
   assert.match(frame, /searched/);
   instance.unmount();
 });

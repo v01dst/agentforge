@@ -7,6 +7,8 @@ import type { TurnRunner } from '../turn.js';
 import { ActivityIndicator } from './Activity.js';
 import { colors } from './theme.js';
 import { fuzzyScore } from './palette.js';
+import { currentSessionMode } from '../../modes/session-modes.js';
+import { currentPermissionMode } from '../../permissions.js';
 import { listSessions, loadSession, newSessionId, renameSession, saveSession, SESSION_SCHEMA_VERSION, compactTranscript } from '../../sessions/store.js';
 import { appendSessionLog, forkSession, loadFullTranscript } from '../../sessions/log.js';
 import { loadMemory } from '../../memory/store.js';
@@ -74,19 +76,116 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
 
 const EXIT_CONFIRM_MS = 2000;
 
-function MessageRow({ message }: { message: ChatMessage }) {
-  if (message.role === 'user') return <Text><Text color={colors.uiOk}>you › </Text>{message.text}</Text>;
-  if (message.role === 'system') return <Text dimColor>note › {message.text}</Text>;
+/** Word-wrap a string to `width` columns (CJK-safe enough for terminal use). */
+function wrapText(text: string, width: number): string[] {
+  const lines: string[] = [];
+  for (const rawLine of text.split('\n')) {
+    if (rawLine.length <= width) { lines.push(rawLine); continue; }
+    let current = '';
+    for (const word of rawLine.split(' ')) {
+      if (!current) { current = word; continue; }
+      if (current.length + 1 + word.length <= width) current = `${current} ${word}`;
+      else { lines.push(current); current = word; }
+    }
+    if (current) lines.push(current);
+  }
+  return lines;
+}
+
+/**
+ * One conversational message rendered as a modern block (0.8 redesign):
+ * a role chip + wrapped content, separated by whitespace — no more
+ * `you ›` text prefixes. System notes stay compact one-liners.
+ */
+function MessageRow({ message }: { message: ChatMessage }): React.ReactElement {
+  if (message.role === 'system') {
+    return <Text dimColor>  · {message.text.replace(/\n/g, ' · ')}</Text>;
+  }
   if (message.role === 'tool') {
     const ms = message.meta?.ms;
     return (
       <Text color={colors.tool}>
-        {'⚙ tool › '}{message.meta?.tool ?? message.text}
-        {ms !== undefined ? ` (${(ms / 1000).toFixed(1)}s)` : ''}
+        {'  ├ '}{message.meta?.tool ?? message.text}
+        {ms !== undefined ? `  ${ms}ms` : ''}
       </Text>
     );
   }
-  return <Text><Text color={colors.accent}>agent › </Text>{message.text}</Text>;
+  if (message.role === 'user') {
+    return (
+      <Box flexDirection="column" marginTop={0}>
+        <Text><Text bold color={colors.uiOk}>YOU</Text><Text dimColor> ──</Text></Text>
+        {wrapText(message.text, 100).map((line, index) => <Text key={index}>  {line}</Text>)}
+      </Box>
+    );
+  }
+  return (
+    <Box flexDirection="column" marginTop={0}>
+      <Text><Text bold color={colors.accent}>AGENT</Text><Text dimColor> ──</Text></Text>
+      {wrapText(message.text, 100).map((line, index) => <Text key={index}>  {line}</Text>)}
+      <Text> </Text>
+    </Box>
+  );
+}
+
+/** Live agent output while the turn streams. */
+function AgentBlock({ text, streaming }: { text: string; streaming?: boolean }): React.ReactElement {
+  return (
+    <Box flexDirection="column" marginTop={0}>
+      <Text><Text bold color={colors.accent}>AGENT</Text>{streaming ? <Text dimColor> ── thinking…</Text> : <Text dimColor> ──</Text>}</Text>
+      {wrapText(text, 100).map((line, index) => <Text key={index}>  {line}</Text>)}
+    </Box>
+  );
+}
+
+/** Tool activity as a vertical timeline: `├ ✓ name 12ms`. */
+function ToolTimeline({ events }: { events: ReadonlyArray<{ name: string; state: 'running' | 'done'; ms?: number; argsSummary?: string }> }): React.ReactElement {
+  if (!events.length) return <></>;
+  return (
+    <Box flexDirection="column">
+      {events.map((event) =>
+        event.state === 'running' ? (
+          <Text key={`${event.name}-running`} color={colors.tool}>
+            {'  ├ ⠿ '}{event.name}{event.argsSummary ? ` ${event.argsSummary.slice(0, 48)}` : ''}
+          </Text>
+        ) : (
+          <Text key={`${event.name}-done`} color={colors.uiOk}>
+            {'  ├ ✓ '}{event.name}{event.ms !== undefined ? `  ${event.ms}ms` : ''}
+          </Text>
+        ),
+      )}
+    </Box>
+  );
+}
+
+/** Inline error — tinted lines, no oversized border box. */
+function InlineError({ message }: { message: string }): React.ReactElement {
+  return (
+    <Box flexDirection="column" marginTop={0}>
+      {wrapText(message, 98).map((line, index) => <Text key={index} color={colors.error}>  ✗ {index === 0 ? '' : '  '}{line}</Text>)}
+      <Text dimColor>  try /doctor or /help</Text>
+    </Box>
+  );
+}
+
+/** Slash suggestion menu with fuzzy-ranked rows and detail hints. */
+function SlashMenu({ filtered, clampedIndex, empty }: { filtered: readonly SlashCommand[]; clampedIndex: number; empty: boolean }): React.ReactElement {
+  if (empty) return <Text dimColor>  (no matching commands)</Text>;
+  return (
+    <Box flexDirection="column">
+      {filtered.slice(0, 9).map((command, position) => (
+        <Text key={command.name} color={position === clampedIndex ? colors.accent : undefined}>
+          {position === clampedIndex ? '  ❯ /' : '    /'}{command.name}
+          {command.usage ? <Text dimColor> {command.usage}</Text> : null}
+          <Text dimColor> — {command.description}</Text>
+        </Text>
+      ))}
+    </Box>
+  );
+}
+
+/** Footer key hints. */
+function FooterHints(): React.ReactElement {
+  return <Text dimColor>  enter send · / commands · ctrl+c cancel turn · ctrl+c twice exit</Text>;
 }
 
 /**
@@ -494,67 +593,40 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
 
   return (
     <Box flexDirection="column">
-      <Static items={messages}>
-        {(message, index) => <MessageRow key={index} message={message} />}
-      </Static>
-      {streamingText ? <MessageRow message={{ role: 'assistant', text: streamingText }} /> : null}
-      <Box flexDirection="column">
-        {toolEvents.map((event) =>
-          event.state === 'running' ? (
-            <Text key={`${event.name}-running`} color={colors.tool}>
-              {'⠿ '}{event.name}{event.argsSummary ? ` ${event.argsSummary.slice(0, 60)}` : ''}
-            </Text>
-          ) : (
-            <Text key={`${event.name}-done`} color={colors.uiOk}>
-              {'✓ '}{event.name}{event.ms !== undefined ? ` (${event.ms}ms)` : ''}
-            </Text>
-          ),
-        )}
-      </Box>
-      {running ? <ActivityIndicator label={activity ?? 'working… (Ctrl-C to cancel)'} /> : null}
-      {lastError && !running ? (
-        <Box borderStyle="round" borderColor="red" paddingX={1} flexDirection="column" marginTop={1}>
-          <Text color="red">{lastError}</Text>
-          <Text dimColor>try /doctor or /help</Text>
-        </Box>
-      ) : null}
-      {showExitConfirm ? <Text color="yellow">Press Ctrl+C again to exit</Text> : null}
-      {menuOpen ? (
-        <Box flexDirection="column">
-          {filtered.length === 0
-            ? <Text dimColor>(no matching commands)</Text>
-            : filtered.map((command, position) => (
-              <Text key={command.name} color={position === clampedIndex ? 'cyan' : undefined}>
-                {position === clampedIndex ? '\u203a ' : '  '}/{command.name}
-                {command.usage ? <Text dimColor> {command.usage}</Text> : null}
-                {' — '}
-                <Text dimColor>{command.description}</Text>
-              </Text>
-            ))}
-        </Box>
-      ) : null}
-      <Box borderStyle="round" borderColor={colors.border} paddingX={1}>
-        <Text color={colors.accent}>❯ </Text>
-        <Text>{input}</Text>
-        <Text dimColor>▏</Text>
-      </Box>
-      <StatusLine
+      <HeaderChips
         provider={provider}
         model={model}
         projectName={projectName}
         totalTokens={status.totalTokens}
         elapsedMs={status.elapsedMs}
       />
+      <Static items={messages}>
+        {(message, index) => <MessageRow key={index} message={message} />}
+      </Static>
+      {streamingText ? <AgentBlock text={streamingText} streaming /> : null}
+      <ToolTimeline events={toolEvents} />
+      {running ? <ActivityIndicator label={activity ?? 'working… (Ctrl-C to cancel)'} /> : null}
+      {lastError && !running ? <InlineError message={lastError} /> : null}
+      {showExitConfirm ? <Text color="yellow">Press Ctrl+C again to exit</Text> : null}
+      {menuOpen ? (
+        <SlashMenu
+          filtered={filtered}
+          clampedIndex={clampedIndex}
+          empty={filtered.length === 0}
+        />
+      ) : null}
+      <Box borderStyle="round" borderColor={colors.border} paddingX={1}>
+        <Text color={colors.accent}>❯ </Text>
+        <Text>{input}</Text>
+        <Text dimColor>▏</Text>
+      </Box>
+      <FooterHints />
     </Box>
   );
 }
 
-/**
- * Single dim status line replacing the old header/footer chrome:
- * `project:<name> · <provider>/<model> · <N> tok · <X.X>s · ctrl+c cancel`.
- * Segments are omitted when their value is undefined.
- */
-function StatusLine({
+/** Sticky header: brand + live status chips (model, session mode, posture, tokens). */
+function HeaderChips({
   provider,
   model,
   projectName,
@@ -566,16 +638,25 @@ function StatusLine({
   projectName?: string;
   totalTokens?: number;
   elapsedMs?: number;
-}) {
-  const segments: string[] = [];
-  if (projectName) segments.push(`project:${projectName}`);
-  if (provider || model) segments.push([provider, model].filter(Boolean).join('/'));
-  if (totalTokens !== undefined) segments.push(`${totalTokens} tok`);
-  if (elapsedMs !== undefined) segments.push(`${(elapsedMs / 1000).toFixed(1)}s`);
-  segments.push('ctrl+c cancel');
+}): React.ReactElement {
+  const tokens = totalTokens !== undefined
+    ? totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}k tok` : `${totalTokens} tok`
+    : undefined;
+  let sessionMode: string | undefined;
+  let posture: string | undefined;
+  try {
+    sessionMode = currentSessionMode();
+    posture = currentPermissionMode();
+  } catch { /* chips degrade gracefully */ }
   return (
-    <Box marginTop={0}>
-      {segments.length > 0 ? <Text dimColor>{segments.join(' · ')}</Text> : null}
+    <Box flexWrap="wrap" columnGap={1}>
+      <Text bold color={colors.bannerTitle}>◆ AgentForge</Text>
+      {provider || model ? <Text dimColor>[{[provider, model].filter(Boolean).join('/')}]</Text> : null}
+      {sessionMode ? <Text color={colors.accent}>[{sessionMode}]</Text> : null}
+      {posture ? <Text color={colors.tool}>[{posture}]</Text> : null}
+      {projectName ? <Text dimColor>[project:{projectName}]</Text> : null}
+      {tokens ? <Text dimColor>[{tokens}]</Text> : null}
+      {elapsedMs !== undefined && elapsedMs > 0 ? <Text dimColor>[{(elapsedMs / 1000).toFixed(1)}s]</Text> : null}
     </Box>
   );
 }
