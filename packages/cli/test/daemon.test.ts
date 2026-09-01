@@ -19,7 +19,12 @@ async function withTemp(fn: (root: string) => Promise<void>): Promise<void> {
   try {
     await fn(root);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    // The daemon loop may exit before a pending stop-file timer fires; give
+    // the temp dir a chance to settle before teardown.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try { await rm(root, { recursive: true, force: true }); break; }
+      catch { await new Promise((resolveWait) => setTimeout(resolveWait, 50)); }
+    }
   }
 }
 
@@ -32,6 +37,21 @@ const failingRunner: TurnRunner = async function* (input) {
   throw new Error(`job exploded: ${input}`);
 };
 
+/** Timers that write the stop file; cleared after each test so a pending
+ *  stop cannot land after runDaemon exits and collide with temp cleanup. */
+const stopTimers: ReturnType<typeof setTimeout>[] = [];
+
+function scheduleStop(root: string, delayMs: number): void {
+  stopTimers.push(setTimeout(() => {
+    void writeFile(daemonPaths(root).stop, 'now\n', 'utf8').catch(() => {});
+  }, delayMs));
+}
+
+function clearStopTimers(): void {
+  for (const timer of stopTimers) clearTimeout(timer);
+  stopTimers.length = 0;
+}
+
 async function dropJob(root: string, id: string, body: Record<string, unknown>): Promise<void> {
   const paths = daemonPaths(root);
   await mkdir(paths.jobs, { recursive: true });
@@ -40,23 +60,24 @@ async function dropJob(root: string, id: string, body: Record<string, unknown>):
 
 test('daemon beats, drains jobs, writes results, and stops on the stop file', async () => {
   await withTemp(async (root) => {
-    await dropJob(root, 'j1', { id: 'j1', type: 'prompt', text: 'say hi' });
-    // Stop on the second beat.
-    setTimeout(() => {
-      void writeFile(daemonPaths(root).stop, 'now\n', 'utf8').catch(() => {});
-    }, 30);
-    const result = await runDaemon({ runner: echoRunner, cwd: root, intervalMs: 20, maxLoops: 2 });
-    assert.ok(result.beats >= 1 && result.beats <= 2, `beats within 1..2 (got ${result.beats})`);
-    assert.equal(result.jobsProcessed, 1);
-    assert.equal(result.jobsFailed, 0);
-    const resultBody = JSON.parse(await readFile(join(daemonPaths(root).out, 'j1.result.json'), 'utf8')) as { ok: boolean; output: string };
-    assert.equal(resultBody.ok, true);
-    assert.equal(resultBody.output, 'done:say hi');
-    const jobsLeft = await readdir(daemonPaths(root).jobs);
-    assert.equal(jobsLeft.length, 0, 'drained jobs are removed');
-    const heartbeat = await readHeartbeat(root);
-    assert.ok(heartbeat);
-    assert.equal(heartbeat!.beats, result.beats);
+    try {
+      await dropJob(root, 'j1', { id: 'j1', type: 'prompt', text: 'say hi' });
+      scheduleStop(root, 30);
+      const result = await runDaemon({ runner: echoRunner, cwd: root, intervalMs: 20, maxLoops: 2 });
+      assert.ok(result.beats >= 1 && result.beats <= 2, `beats within 1..2 (got ${result.beats})`);
+      assert.equal(result.jobsProcessed, 1);
+      assert.equal(result.jobsFailed, 0);
+      const resultBody = JSON.parse(await readFile(join(daemonPaths(root).out, 'j1.result.json'), 'utf8')) as { ok: boolean; output: string };
+      assert.equal(resultBody.ok, true);
+      assert.equal(resultBody.output, 'done:say hi');
+      const jobsLeft = await readdir(daemonPaths(root).jobs);
+      assert.equal(jobsLeft.length, 0, 'drained jobs are removed');
+      const heartbeat = await readHeartbeat(root);
+      assert.ok(heartbeat);
+      assert.equal(heartbeat!.beats, result.beats);
+    } finally {
+      clearStopTimers();
+    }
   });
 });
 
@@ -69,28 +90,32 @@ test('maxLoops bounds the loop deterministically', async () => {
 
 test('failing jobs are counted and their errors land in result files', async () => {
   await withTemp(async (root) => {
-    await dropJob(root, 'boom', { id: 'boom', type: 'prompt', text: 'break' });
-    setTimeout(() => {
-      void writeFile(daemonPaths(root).stop, 'now\n', 'utf8').catch(() => {});
-    }, 30);
-    const result = await runDaemon({ runner: failingRunner, cwd: root, intervalMs: 20, maxLoops: 2 });
-    assert.equal(result.jobsFailed, 1);
-    const resultBody = JSON.parse(await readFile(join(daemonPaths(root).out, 'boom.result.json'), 'utf8')) as { ok: boolean; error: string };
-    assert.equal(resultBody.ok, false);
-    assert.match(resultBody.error, /job exploded/);
+    try {
+      await dropJob(root, 'boom', { id: 'boom', type: 'prompt', text: 'break' });
+      scheduleStop(root, 30);
+      const result = await runDaemon({ runner: failingRunner, cwd: root, intervalMs: 20, maxLoops: 2 });
+      assert.equal(result.jobsFailed, 1);
+      const resultBody = JSON.parse(await readFile(join(daemonPaths(root).out, 'boom.result.json'), 'utf8')) as { ok: boolean; error: string };
+      assert.equal(resultBody.ok, false);
+      assert.match(resultBody.error, /job exploded/);
+    } finally {
+      clearStopTimers();
+    }
   });
 });
 
 test('malformed job files fail loudly without killing the daemon', async () => {
   await withTemp(async (root) => {
-    await dropJob(root, 'broken', { id: 'broken', type: 'nope' });
-    setTimeout(() => {
-      void writeFile(daemonPaths(root).stop, 'now\n', 'utf8').catch(() => {});
-    }, 30);
-    const result = await runDaemon({ runner: echoRunner, cwd: root, intervalMs: 20, maxLoops: 2 });
-    assert.equal(result.jobsFailed, 1);
-    const resultBody = JSON.parse(await readFile(join(daemonPaths(root).out, 'broken.json.result.json'), 'utf8')) as { ok: boolean; error: string };
-    assert.match(resultBody.error, /Malformed daemon job file/);
+    try {
+      await dropJob(root, 'broken', { id: 'broken', type: 'nope' });
+      scheduleStop(root, 30);
+      const result = await runDaemon({ runner: echoRunner, cwd: root, intervalMs: 20, maxLoops: 2 });
+      assert.equal(result.jobsFailed, 1);
+      const resultBody = JSON.parse(await readFile(join(daemonPaths(root).out, 'broken.json.result.json'), 'utf8')) as { ok: boolean; error: string };
+      assert.match(resultBody.error, /Malformed daemon job file/);
+    } finally {
+      clearStopTimers();
+    }
   });
 });
 
