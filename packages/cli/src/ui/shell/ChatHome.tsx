@@ -6,6 +6,7 @@ import type { ChatMessage } from '../useTurn.js';
 import type { TurnRunner } from '../turn.js';
 import { ActivityIndicator } from './Activity.js';
 import { colors } from './theme.js';
+import { fuzzyScore } from './palette.js';
 import { listSessions, loadSession, newSessionId, renameSession, saveSession, SESSION_SCHEMA_VERSION, compactTranscript } from '../../sessions/store.js';
 import { appendSessionLog, forkSession, loadFullTranscript } from '../../sessions/log.js';
 import { loadMemory } from '../../memory/store.js';
@@ -214,8 +215,19 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
   const menuOpen = input.startsWith('/') && !menuDismissed;
   const filtered = useMemo(() => {
     if (!menuOpen) return [];
-    const needle = input.slice(1).split(/\s+/)[0]?.toLowerCase() ?? '';
-    return commands.filter((command) => command.name.toLowerCase().startsWith(needle));
+    const needle = input.slice(1).split(/\s+/)[0] ?? '';
+    if (!needle.trim()) return [...commands];
+    // Fuzzy (Phase 0.8): match anywhere in the name or description —
+    // "pvdr" finds /providers, "approve" finds /skills via its description —
+    // ranked by the same matcher the Ctrl-K palette uses.
+    return commands
+      .map((command) => ({
+        command,
+        score: Math.max(fuzzyScore(needle, command.name), fuzzyScore(needle, `${command.name} ${command.description ?? ''}`) - 5),
+      }))
+      .filter((entry) => entry.score >= 0)
+      .sort((left, right) => right.score - left.score)
+      .map((entry) => entry.command);
   }, [commands, input, menuOpen]);
 
   const clampedIndex = Math.min(selectedIndex, Math.max(filtered.length - 1, 0));
