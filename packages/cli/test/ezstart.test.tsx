@@ -1,0 +1,153 @@
+import { strict as assert } from 'node:assert';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { test } from 'node:test';
+import React from 'react';
+import { render } from 'ink-testing-library';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { EzStart } from '../src/ui/shell/EzStart.js';
+
+const delay = (ms: number) => new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+
+test('EzStart welcome screen offers three paths', async () => {
+  const instance = render(React.createElement(EzStart, { onComplete: () => {}, onSkip: () => {} }));
+  await delay(30);
+  const frame = instance.lastFrame() ?? '';
+  assert.match(frame, /Welcome to AgentForge/);
+  assert.match(frame, /Quick start/);
+  assert.match(frame, /Custom provider/);
+  assert.match(frame, /Skip for now/);
+  instance.unmount();
+});
+
+test('EzStart preset flow: filter, pick DeepSeek, masked key, model from endpoint, save', async () => {
+  const home = await mkdtemp(`${tmpdir()}/af-ezstart-`);
+  const project = await mkdtemp(`${tmpdir()}/af-ezstart-p-`);
+  const previousHome = process.env.HOME;
+  const previousCwd = process.cwd();
+  process.env.HOME = home;
+  process.chdir(project);
+  let done: { name: string; model: string } | undefined;
+  try {
+    // Fake the provider endpoint: DeepSeek-style { data: [...] } response.
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string | URL) => {
+      if (String(url).includes('/models')) {
+        return new Response(JSON.stringify({ data: [{ id: 'deepseek-v4-pro' }, { id: 'deepseek-v4-flash' }] }), { status: 200 });
+      }
+      return new Response('{}', { status: 404 });
+    }) as typeof fetch;
+    try {
+      const instance = render(React.createElement(EzStart, {
+        onComplete: (result) => { done = result; },
+        onSkip: () => {},
+      }));
+      await delay(30);
+      instance.stdin.write('1'); // quick start
+      await delay(30);
+      instance.stdin.write('deepseek'); // fuzzy filter
+      await delay(30);
+      instance.stdin.write('\r'); // pick DeepSeek (first match)
+      await delay(30);
+      instance.stdin.write('sk-ds-secret'); // masked key entry
+      await delay(60);
+      const maskedFrame = instance.lastFrame() ?? '';
+      assert.match(maskedFrame, /•+/, 'key entry is masked with bullets');
+      assert.ok(!maskedFrame.includes('sk-ds-secret'), 'raw key is never rendered');
+      instance.stdin.write('\r'); // submit key → endpoint fetch
+      await delay(120); // fetch settles, model list renders
+      let frame = instance.lastFrame() ?? '';
+      assert.match(frame, /deepseek-v4-flash/, 'fetched model list rendered');
+      assert.ok(!frame.includes('sk-ds-secret'), 'raw key is never rendered');
+      // deepseek-v4-flash is preselected (preset default position); enter confirms.
+      instance.stdin.write('\r');
+      await delay(80);
+      frame = instance.lastFrame() ?? '';
+      assert.match(frame, /ready/, 'done state rendered');
+      instance.unmount();
+
+      // Provider entry persisted to the project store.
+      const providers = JSON.parse(await readFile(join(project, '.agentforge', 'providers.json'), 'utf8')) as { providers: Array<{ name: string; model: string; protocol: string }> };
+      assert.equal(providers.providers[0]!.name, 'deepseek');
+      assert.equal(providers.providers[0]!.model, 'deepseek-v4-flash');
+      assert.equal(providers.providers[0]!.protocol, 'openai-compatible');
+      // Credential persisted to the home store with 0600.
+      const creds = JSON.parse(await readFile(join(home, '.agentforge', 'credentials.json'), 'utf8')) as { entries: Record<string, string>; envs: Record<string, string> };
+      assert.equal(creds.entries.deepseek, 'sk-ds-secret');
+      assert.equal(creds.envs.DEEPSEEK_API_KEY, 'sk-ds-secret');
+      const info = await stat(join(home, '.agentforge', 'credentials.json'));
+      assert.equal(info.mode & 0o777, 0o600);
+      assert.deepEqual(done, { name: 'deepseek', model: 'deepseek-v4-flash' });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    process.chdir(previousCwd);
+    await rm(home, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test('EzStart custom flow: name → base URL → key → model id → saved', async () => {
+  const home = await mkdtemp(`${tmpdir()}/af-ezstart-c-`);
+  const project = await mkdtemp(`${tmpdir()}/af-ezstart-cp-`);
+  const previousHome = process.env.HOME;
+  const previousCwd = process.cwd();
+  process.env.HOME = home;
+  process.chdir(project);
+  try {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(JSON.stringify({ data: [{ id: 'glm-5.3' }] }), { status: 200 })) as typeof fetch;
+    try {
+      const instance = render(React.createElement(EzStart, { onComplete: () => {}, onSkip: () => {} }));
+      await delay(30);
+      instance.stdin.write('2'); // custom
+      await delay(30);
+      instance.stdin.write('my-gateway');
+      await delay(60);
+      instance.stdin.write('\r');
+      await delay(60);
+      instance.stdin.write('https://api.mygw.com/v1');
+      await delay(60);
+      instance.stdin.write('\r');
+      await delay(60);
+      instance.stdin.write('gw-key-123');
+      await delay(60);
+      instance.stdin.write('\r');
+      await delay(60);
+      instance.stdin.write('glm-5.3'); // model id field (4/4)
+      await delay(60);
+      instance.stdin.write('\r'); // save directly
+      await delay(200);
+      const frame = instance.lastFrame() ?? '';
+      assert.match(frame, /my-gateway ready \(glm-5.3\)/);
+      instance.unmount();
+      const providers = JSON.parse(await readFile(join(project, '.agentforge', 'providers.json'), 'utf8')) as { providers: Array<{ name: string; baseUrl?: string; apiKeyEnv?: string }> };
+      assert.equal(providers.providers[0]!.name, 'my-gateway');
+      assert.equal(providers.providers[0]!.baseUrl, 'https://api.mygw.com/v1');
+      const creds = JSON.parse(await readFile(join(home, '.agentforge', 'credentials.json'), 'utf8')) as { envs: Record<string, string> };
+      assert.equal(Object.values(creds.envs)[0], 'gw-key-123');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    process.chdir(previousCwd);
+    await rm(home, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
+});
+
+test('EzStart skip calls onSkip', async () => {
+  let skipped = false;
+  const instance = render(React.createElement(EzStart, { onComplete: () => {}, onSkip: () => { skipped = true; } }));
+  await delay(30);
+  instance.stdin.write('s');
+  await delay(30);
+  assert.equal(skipped, true);
+  instance.unmount();
+});
+

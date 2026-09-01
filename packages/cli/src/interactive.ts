@@ -77,7 +77,7 @@ export async function launchInteractiveShell(options: { initialMessages?: import
     import('./ui/slash/registry.js'),
     import('./ui/shell/TuiRoot.js'),
   ]);
-  const [{ ConnectWizard }, { DoctorScreen }, { ToolsScreen }, { SkillsScreen }, { WorkflowsScreen }, { RunsScreen }, { AgentsScreen }, { ModelsScreen }, { SettingsScreen }, { NewProjectScreen }, { RunScreen }] = await Promise.all([
+  const [{ ConnectWizard }, { DoctorScreen }, { ToolsScreen }, { SkillsScreen }, { WorkflowsScreen }, { RunsScreen }, { AgentsScreen }, { HelpScreen }, { ModelsScreen }, { SettingsScreen }, { NewProjectScreen }, { RunScreen }] = await Promise.all([
     import('./ui/slash/ConnectWizard.js'),
     import('./ui/slash/DoctorScreen.js'),
     import('./ui/slash/ToolsScreen.js'),
@@ -85,6 +85,7 @@ export async function launchInteractiveShell(options: { initialMessages?: import
     import('./ui/slash/WorkflowsScreen.js'),
     import('./ui/slash/RunsScreen.js'),
     import('./ui/slash/AgentsScreen.js'),
+    import('./ui/slash/HelpScreen.js'),
     import('./ui/screens/ModelsScreen.js'),
     import('./ui/screens/SettingsScreen.js'),
     import('./ui/screens/NewProjectScreen.js'),
@@ -112,6 +113,7 @@ export async function launchInteractiveShell(options: { initialMessages?: import
     run: RunScreen as ComponentType,
     connect: ConnectWizard as ComponentType,
     'doctor-result': DoctorScreen as ComponentType,
+    help: HelpScreen as ComponentType,
   };
 
   let instance: ReturnType<typeof render>;

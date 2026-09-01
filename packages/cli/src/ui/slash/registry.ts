@@ -617,3 +617,34 @@ export function slashCommandNames(registry: readonly RegisteredCommand[]): strin
 // Re-exported for screens that need shared helpers without extra imports.
 export { createCodingTools, loadConfig };
 export { connectCommand, testCommand, VERSION };
+
+/**
+ * Command metadata for cheat-sheet views (0.8 X): the live registry built
+ * with no-op handlers, projected to name/description/usage/category.
+ */
+export interface CommandCatalogEntry {
+  name: string;
+  description: string;
+  usage?: string;
+  aliases?: readonly string[];
+  category: 'session' | 'config' | 'resources' | 'project' | 'system';
+}
+
+export function commandCatalog(): CommandCatalogEntry[] {
+  const noop = (): void => {};
+  const handlers: SlashHandlers = {
+    openScreen: noop,
+    runSuspended: (async (fn: () => Promise<number>) => { await fn(); }) as unknown as () => Promise<void>,
+    pushSystem: noop,
+    clearConversation: noop,
+    exitRequested: noop,
+    mode: () => 'project',
+  };
+  return buildSlashRegistry(handlers).map((entry) => ({
+    name: entry.name,
+    description: entry.description,
+    usage: entry.usage,
+    aliases: entry.aliases,
+    category: entry.category,
+  }));
+}

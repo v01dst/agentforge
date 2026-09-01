@@ -13,8 +13,7 @@ import { listSessions, loadSession, newSessionId, renameSession, saveSession, SE
 import { appendSessionLog, forkSession, loadFullTranscript } from '../../sessions/log.js';
 import { loadMemory } from '../../memory/store.js';
 import { listAgentsSync, extractAgentMentions } from '../../agents/agents.js';
-import { validateProviderConnection } from '../../global-config.js';
-import type { GlobalProviderEntry } from '../../global-config.js';
+import { EzStart } from './EzStart.js';
 
 export interface SlashCommand {
   name: string;
@@ -212,8 +211,6 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
   const [menuDismissed, setMenuDismissed] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [awaitingChoice, setAwaitingChoice] = useState<'provider' | 'key' | undefined>(undefined);
-  const [pendingProvider, setPendingProvider] = useState<Pick<GlobalProviderEntry, 'name' | 'protocol' | 'apiKeyEnv'> | null>(null);
   const draftRef = useRef('');
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -289,20 +286,9 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
 
   // Welcome banner so users know the interface is ready and how to discover
   // commands (rendered once, before the first message). During first-run
-  // onboarding it instead presents the provider picker.
+  // onboarding the EzStart flow takes over instead.
   useEffect(() => {
-    if (needsOnboarding) {
-      pushSystem(
-        'Welcome to AgentForge.\n\nNo model connected yet. Pick one:\n' +
-        '  [1] OpenAI     (OPENAI_API_KEY)\n' +
-        '  [2] Anthropic  (ANTHROPIC_API_KEY)\n' +
-        '  [3] Google     (GEMINI_API_KEY)\n' +
-        '  [s] Skip — use offline mock\n\n' +
-        'Reply with a number, or set the env var and /reload.',
-      );
-      setAwaitingChoice('provider');
-      return;
-    }
+    if (needsOnboarding) return;
     pushSystem('AgentForge ready — type a message to chat, or / for commands. /help lists everything.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -356,7 +342,6 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
     setHistoryIndex(-1);
     draftRef.current = '';
     if (!raw.startsWith('/')) {
-      if (handleOnboardingInput(raw)) return;
       // @mention (Phase F): inline `@agent` tokens hint at subagent delegation.
       // Registry scan only runs when the text actually contains '@'.
       if (raw.includes('@')) {
@@ -482,47 +467,6 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
     onSlashCommand?.(command.name, command.args);
   };
 
-  /** Inline first-run provider onboarding: runs only for non-slash input. */
-  const handleOnboardingInput = (raw: string): boolean => {
-    if (awaitingChoice === 'provider') {
-      if (raw === '1' || raw === '2' || raw === '3') {
-        const options: ReadonlyArray<Pick<GlobalProviderEntry, 'name' | 'protocol' | 'apiKeyEnv'>> = [
-          { name: 'OpenAI', protocol: 'openai', apiKeyEnv: 'OPENAI_API_KEY' },
-          { name: 'Anthropic', protocol: 'anthropic', apiKeyEnv: 'ANTHROPIC_API_KEY' },
-          { name: 'Google', protocol: 'gemini', apiKeyEnv: 'GEMINI_API_KEY' },
-        ];
-        const chosen = options[Number(raw) - 1];
-        if (!chosen) return true;
-        setPendingProvider(chosen);
-        setAwaitingChoice('key');
-        pushSystem(`Paste your ${chosen.apiKeyEnv} (input will be masked):`);
-      } else if (raw === 's' || raw === 'S') {
-        setAwaitingChoice(undefined);
-        pushSystem('Offline mock mode active — /connect anytime.');
-      } else {
-        pushSystem('Reply with 1, 2, 3, or s to skip.');
-      }
-      return true;
-    }
-    if (awaitingChoice === 'key') {
-      const entry = pendingProvider;
-      setAwaitingChoice(undefined);
-      setPendingProvider(null);
-      if (!entry) return true;
-      process.env[entry.apiKeyEnv] = raw;
-      void validateProviderConnection(entry, { live: false }).then((result) => {
-        if (result.ok) {
-          pushSystem('connected — say hello!');
-          onProviderConnected?.();
-        } else {
-          pushSystem(result.reason ?? `Could not validate ${entry.name}.`);
-        }
-      });
-      return true;
-    }
-    return false;
-  };
-
   useInput((value, key) => {
     if (key.ctrl && value === 'c') {
       if (running) { cancel(); return; }
@@ -607,6 +551,15 @@ export function ChatHome({ runner, commands, onSlashCommand, provider = 'mock', 
       <ToolTimeline events={toolEvents} />
       {running ? <ActivityIndicator label={activity ?? 'working… (Ctrl-C to cancel)'} /> : null}
       {lastError && !running ? <InlineError message={lastError} /> : null}
+      {needsOnboarding ? (
+        <EzStart
+          onComplete={(result) => {
+            pushSystem(`✓ connected to ${result.name} (${result.model}) — say hello!`);
+            onProviderConnected?.();
+          }}
+          onSkip={() => pushSystem('skipped setup — no model connected yet. /connect or /providers anytime.')}
+        />
+      ) : null}
       {showExitConfirm ? <Text color="yellow">Press Ctrl+C again to exit</Text> : null}
       {menuOpen ? (
         <SlashMenu
