@@ -2,6 +2,23 @@
 
 All notable changes to AgentForge are documented here.
 
+## [Unreleased]
+
+### The Pharaoh's Monument TUI (1.0-line reset to 0.1.0)
+
+- **Ground-up TUI redesign** with a distinct identity — Ancient-Egyptian craftsmanship, monumental and calm:
+  - **The Cartouche** (header): `𓂀  AGENTFORGE  𓋴` in Pharaoh's Gold over a `═══` temple-base rule, with `𓋹 ONLINE` (turquoise) or the scribe's `OFFLINE` indicator.
+  - **The Hall of Records** (messages): user scrolls lean right under a gold `▸`; agent words stand between turquoise pillars (`│ … │`); system notes are chiselled in stone gray.
+  - **The Sculptor's Chisel** (live activity): `𓂀 carving: read_file…` in desert sand turns into `✓ 𓋴 carved read_file 12ms` in turquoise; the spinner is a golden ankh.
+  - **The Offering** (input): `𓋴 FORGE > ` in gold with a turquoise cursor.
+  - **The Scribe's Tablet** (status bar): `𓁈 provider │ 𓃀 model │ 𓋴 mode │ 𓂋 posture │ 𓆣 tokens`, one dark anchored band.
+  - **Monument splash** replaces the block-letter wordmark: the name sealed in a gold cartouche.
+- **Design tokens**: `theme.ts` gains a glyph token set (`𓂀 𓋴 𓋹 𓁈 𓃀 𓂋 𓆣` + marks) with `AGENTFORGE_GLYPHS=ascii|unicode` control and automatic ASCII fallback; two new skins — `pharaoh` (obsidian `#0A0A0A`, now the default) and `pharaoh-indigo` (night-sky `#0B1A2A`) — using Pharaoh's Gold `#D4A017/#C99A2A`, Lapis/Turquoise `#1E3A5F/#48C9B0`, Desert Sand `#E67E22`, Papyrus `#FDF5E6`, Stone Gray `#8E8E8E`. All previous skins remain on `/skin`.
+- **Current model ids everywhere**: a single `DEFAULT_MODEL_IDS` map in `@agentforge-oss/models` (verified against provider docs 2026-09: `gpt-5.6-sol`, `claude-opus-5`, `gemini-2.0-flash`) backs every adapter default, auto-detection, subagent fallback, and the builtin provider report — all stale `gpt-4o*`/`claude-3-5*`/`gemini-1.5` ids removed. `/model` accepts any id (the live list comes from the endpoint via the EzStart picker and `/models` manager) and notes when an id is not in the provider's current list.
+- **Reliability**: `dispatchSlash` now awaits async command handlers (no more fire-and-forget races); session-mode and permission-posture state flows through the Scribe's Tablet live.
+- **Version reset**: the 1.0 line starts at `0.1.0` in-repo (all packages, `VERSION`, README, banner). Not published to npm — registry numbers 0.1.0–0.8.0 were consumed by earlier development releases and are immutable.
+- Tests: new `pharaoh-theme.test.ts` (palette tokens, glyph fallbacks, tablet); all TUI visual assertions migrated; ambient-env test hygiene (leaked `AGENTFORGE_PROVIDER/MODEL` contained); CLI suite 282 green, twice consecutively.
+
 ## [0.8.0] — 2026-09-01
 
 ### TUI redesign, ez-start, providers everywhere (0.8.0)

@@ -1,66 +1,70 @@
-<svg width="1200" height="300" viewBox="0 0 1200 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AgentForge">
+<svg width="1200" height="300" viewBox="0 0 1200 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AgentForge — the terminal forge">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="300" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0d0906"/>
-      <stop offset="0.55" stop-color="#1a1108"/>
-      <stop offset="1" stop-color="#0d0906"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0A0A0A"/>
+      <stop offset="1" stop-color="#0D0B06"/>
     </linearGradient>
-    <linearGradient id="gold" x1="240" y1="60" x2="960" y2="240" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#f59e0b"/>
-      <stop offset="0.5" stop-color="#fbbf24"/>
-      <stop offset="1" stop-color="#f97316"/>
+    <linearGradient id="gold" x1="64" y1="0" x2="1140" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8A6A0E"/>
+      <stop offset="0.5" stop-color="#D4A017"/>
+      <stop offset="1" stop-color="#8A6A0E"/>
     </linearGradient>
-    <linearGradient id="wordmark" x1="180" y1="150" x2="1020" y2="150" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#b45309"/>
-      <stop offset="0.35" stop-color="#fbbf24"/>
-      <stop offset="0.65" stop-color="#fde68a"/>
-      <stop offset="1" stop-color="#f59e0b"/>
+    <linearGradient id="goldText" x1="64" y1="0" x2="620" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C99A2A"/>
+      <stop offset="1" stop-color="#F2D06B"/>
     </linearGradient>
-    <linearGradient id="glowline" x1="80" y1="150" x2="1120" y2="150" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#f59e0b" stop-opacity="0"/>
-      <stop offset="0.5" stop-color="#fbbf24" stop-opacity="0.6"/>
-      <stop offset="1" stop-color="#f97316" stop-opacity="0"/>
-    </linearGradient>
-    <radialGradient id="heathaze" cx="600" cy="120" r="420" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#f59e0b" stop-opacity="0.10"/>
-      <stop offset="1" stop-color="#f59e0b" stop-opacity="0"/>
-    </radialGradient>
   </defs>
 
-  <rect width="1200" height="300" rx="18" fill="url(#bg)"/>
-  <rect x="1.5" y="1.5" width="1197" height="297" rx="16.5" stroke="#f59e0b" stroke-opacity="0.28"/>
-  <rect width="1200" height="300" rx="18" fill="url(#heathaze)"/>
+  <rect width="1200" height="300" rx="14" fill="url(#bg)"/>
+  <rect x="0.5" y="0.5" width="1199" height="299" rx="13.5" stroke="#D4A017" stroke-opacity="0.35"/>
 
-  <!-- faint ember particles across the forge -->
-  <g fill="#fbbf24">
-    <circle cx="132" cy="226" r="2" opacity="0.5"/>
-    <circle cx="204" cy="86" r="1.6" opacity="0.4"/>
-    <circle cx="288" cy="252" r="1.4" opacity="0.35"/>
-    <circle cx="368" cy="64" r="2.2" opacity="0.45"/>
-    <circle cx="452" cy="238" r="1.6" opacity="0.4"/>
-    <circle cx="742" cy="70" r="1.8" opacity="0.45"/>
-    <circle cx="842" cy="246" r="1.4" opacity="0.35"/>
-    <circle cx="936" cy="92" r="2" opacity="0.5"/>
-    <circle cx="1032" cy="238" r="1.6" opacity="0.4"/>
-    <circle cx="1096" cy="76" r="1.8" opacity="0.4"/>
+  <!-- left: brand block -->
+  <text x="64" y="96" font-family="'Segoe UI Historic','Noto Sans Egyptian Hieroglyphs',serif" font-size="30" fill="#C99A2A">𓂀</text>
+  <text x="104" y="98" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="44" font-weight="800" letter-spacing="2" fill="url(#goldText)">AGENTFORGE</text>
+  <text x="64" y="136" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="15" fill="#8E8E8E">carve agents · code safely · stream models · run workflows</text>
+
+  <!-- temple base rule -->
+  <rect x="64" y="152" width="520" height="2" fill="url(#gold)"/>
+
+  <!-- status chips row -->
+  <g font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="12.5">
+    <rect x="64" y="172" width="64" height="24" rx="12" fill="none" stroke="#D4A017" stroke-opacity="0.6"/>
+    <text x="96" y="188" text-anchor="middle" fill="#D4A017">0.1.0</text>
+    <rect x="138" y="172" width="120" height="24" rx="12" fill="none" stroke="#48C9B0" stroke-opacity="0.5"/>
+    <text x="198" y="188" text-anchor="middle" fill="#48C9B0">𓋹 16 providers</text>
+    <rect x="268" y="172" width="100" height="24" rx="12" fill="none" stroke="#FFFFFF" stroke-opacity="0.14"/>
+    <text x="318" y="188" text-anchor="middle" fill="#8E8E8E">local-first</text>
+    <rect x="378" y="172" width="92" height="24" rx="12" fill="none" stroke="#FFFFFF" stroke-opacity="0.14"/>
+    <text x="424" y="188" text-anchor="middle" fill="#8E8E8E">noncommercial</text>
   </g>
 
-  <line x1="80" y1="150" x2="1120" y2="150" stroke="url(#glowline)" stroke-width="2"/>
+  <text x="64" y="252" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="13.5" fill="#FDF5E6">npm install -g @agentforge-oss/cli</text>
+  <text x="64" y="274" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="12" fill="#5A5A5A">free for noncommercial use · commercial licenses on request</text>
 
-  <!-- anvil with hammer sparks, gold-ramped -->
-  <g transform="translate(600 116)">
-    <path d="M-46 44 L46 44 L38 32 L-38 32 Z" fill="url(#gold)" opacity="0.95"/>
-    <path d="M-30 32 C-52 26 -58 12 -34 10 L34 10 C58 12 52 26 30 32 Z" fill="url(#gold)"/>
-    <path d="M34 14 C50 14 56 8 54 2 C48 8 42 8 34 8 Z" fill="url(#gold)" opacity="0.85"/>
-    <rect x="-10" y="44" width="20" height="10" rx="2" fill="url(#gold)" opacity="0.8"/>
-    <!-- hammer spark burst -->
-    <circle cx="70" cy="-6" r="3.4" fill="#fde68a"/>
-    <circle cx="84" cy="-20" r="2.4" fill="#f97316"/>
-    <circle cx="62" cy="-26" r="2" fill="#fbbf24"/>
-    <circle cx="92" cy="0" r="1.6" fill="#fde68a" opacity="0.8"/>
+  <!-- right: the Hall of Records terminal -->
+  <g>
+    <rect x="628" y="30" width="508" height="240" rx="10" fill="#0F0E0A" stroke="#3A2F14"/>
+    <line x1="628" y1="62" x2="1136" y2="62" stroke="#3A2F14"/>
+    <circle cx="652" cy="46" r="5" fill="#E67E22"/>
+    <circle cx="670" cy="46" r="5" fill="#D4A017"/>
+    <circle cx="688" cy="46" r="5" fill="#48C9B0"/>
+    <text x="1112" y="51" text-anchor="end" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="12" fill="#8E8E8E">𓋹 agentforge — the throne room</text>
+
+    <g font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="13">
+      <!-- user scroll, right-leaning -->
+      <text x="1112" y="92" text-anchor="end"><tspan fill="#D4A017">▸ </tspan><tspan fill="#FDF5E6">refactor the login flow, run the tests</tspan></text>
+
+      <!-- agent pillar -->
+      <text x="652" y="120"><tspan fill="#48C9B0">◆ </tspan><tspan fill="#48C9B0" font-weight="700">The Forge speaks</tspan></text>
+      <text x="652" y="144" fill="#C99A2A">│</text>
+      <text x="668" y="144"><tspan fill="#8E8E8E">𓂀 carving: </tspan><tspan fill="#FDF5E6">read_file</tspan></text>
+      <text x="652" y="166"><tspan fill="#C99A2A">│  </tspan><tspan fill="#48C9B0">✓ 𓋴 carved</tspan><tspan fill="#FDF5E6"> read_file</tspan><tspan fill="#8E8E8E">  12ms</tspan></text>
+      <text x="652" y="188"><tspan fill="#C99A2A">│  </tspan><tspan fill="#48C9B0">✓ 𓋴 carved</tspan><tspan fill="#FDF5E6"> apply_patch</tspan><tspan fill="#8E8E8E">  48ms</tspan></text>
+      <text x="652" y="210"><tspan fill="#C99A2A">│  </tspan><tspan fill="#E67E22">𓂀 carving: </tspan><tspan fill="#FDF5E6">run_tests…</tspan></text>
+      <text x="652" y="234" fill="#C99A2A">│</text>
+
+      <!-- scribe's tablet -->
+      <text x="652" y="258" font-size="12" fill="#D4A017">𓁈 claude-opus-5 │ 𓃀 sonnet-5 │ 𓋴 build │ 𓂋 workspace-write │ 𓆣 12.4k tok</text>
+    </g>
   </g>
-
-  <text x="600" y="196" text-anchor="middle" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="64" font-weight="700" letter-spacing="10" fill="url(#wordmark)">AGENTFORGE</text>
-  <text x="600" y="238" text-anchor="middle" font-family="'JetBrains Mono',Menlo,Consolas,monospace" font-size="19" letter-spacing="3" fill="#d6b98c">forge agents · code safely · stream models · run workflows</text>
-  <text x="984" y="278" text-anchor="end" font-family="'JetBrains Mono',Menlo,Consolas,monospace" font-size="15" letter-spacing="2" fill="#92734a">v0.0.2</text>
 </svg>

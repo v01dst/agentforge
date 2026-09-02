@@ -1,20 +1,12 @@
 <svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AgentForge logo">
   <defs>
-    <linearGradient id="lg" x1="8" y1="8" x2="88" y2="88" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#22d3ee"/>
-      <stop offset="0.5" stop-color="#818cf8"/>
-      <stop offset="1" stop-color="#f472b6"/>
+    <linearGradient id="gold" x1="20" y1="0" x2="76" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C99A2A"/>
+      <stop offset="1" stop-color="#F2D06B"/>
     </linearGradient>
   </defs>
-  <rect x="4" y="4" width="88" height="88" rx="22" fill="#0b1020"/>
-  <rect x="4.75" y="4.75" width="86.5" height="86.5" rx="21.25" stroke="url(#lg)" stroke-opacity="0.5"/>
-  <g transform="translate(48 52) scale(0.62)">
-    <path d="M-46 44 L46 44 L38 32 L-38 32 Z" fill="url(#lg)"/>
-    <path d="M-30 32 C-52 26 -58 12 -34 10 L34 10 C58 12 52 26 30 32 Z" fill="url(#lg)"/>
-    <path d="M34 14 C50 14 56 8 54 2 C48 8 42 8 34 8 Z" fill="url(#lg)" opacity="0.85"/>
-    <rect x="-10" y="44" width="20" height="10" rx="2" fill="url(#lg)" opacity="0.8"/>
-    <circle cx="70" cy="-6" r="3.4" fill="#fbbf24"/>
-    <circle cx="82" cy="-18" r="2.4" fill="#f472b6"/>
-    <circle cx="64" cy="-24" r="2" fill="#22d3ee"/>
-  </g>
+  <rect x="4" y="4" width="88" height="88" rx="20" fill="#0A0A0A"/>
+  <rect x="4.75" y="4.75" width="86.5" height="86.5" rx="19.25" stroke="#D4A017" stroke-opacity="0.4"/>
+  <text x="48" y="64" text-anchor="middle" font-family="'Segoe UI Historic','Noto Sans Egyptian Hieroglyphs',serif" font-size="40" fill="url(#gold)">𓂀</text>
+  <rect x="26" y="74" width="44" height="3.5" rx="1.75" fill="url(#gold)"/>
 </svg>

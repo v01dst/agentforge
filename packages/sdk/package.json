@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-oss/sdk",
-  "version": "0.8.0",
+  "version": "0.1.0",
   "description": "Convenience SDK facade for AgentForge runtime packages.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",

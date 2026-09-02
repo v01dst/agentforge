@@ -4,9 +4,9 @@
 
 # AgentForge
 
-**A model-agnostic agent runtime, terminal coding agent, and extension platform — in one TypeScript monorepo.**
+**The terminal forge: a model-agnostic agent runtime, coding agent, and extension platform — carved to last.**
 
-[![version](https://img.shields.io/badge/version-0.7.0-818cf8)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.1.0-D4A017)](CHANGELOG.md)
 [![node](https://img.shields.io/badge/node-%E2%89%A520.11-339933?logo=node.js&logoColor=white)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-9-F69220?logo=pnpm&logoColor=white)](pnpm-workspace.yaml)
 [![license](https://img.shields.io/badge/license-noncommercial%20%2B%20commercial-orange)](LICENSE)
@@ -28,20 +28,27 @@ Most agent CLIs lock you into one provider and one way of working. AgentForge is
 3. **Dangerous things ask first.** File edits and shell commands run through workspace-scoped tools behind explicit permission modes.
 
 ```text
-┌──────────────────────────────────────────────────────────────┐
-│  note › AgentForge ready — type a message, or / for commands │
-│  you   › refactor the login flow and run the tests           │
-│  ⠙ working… (Ctrl-C to cancel)                               │
-│  ✓ read_file   src/auth/login.ts (12ms)                      │
-│  ✓ apply_patch src/auth/login.ts (48ms)                      │
-│  ✓ run_tests    (3.2s)                                       │
-│  agent › Done — 3 files touched, all 14 tests pass.          │
-│ ╭──────────────────────────────────────────────────╮         │
-│ │ ❯ ▏                                              │         │
-│ ╰──────────────────────────────────────────────────╯         │
-│ claude-sonnet-4-5 · plugins: 2 · mcp: 1 · 12.4k tok          │
-└──────────────────────────────────────────────────────────────┘
+𓂀  AGENTFORGE  𓋴                                                    𓋹 ONLINE
+════════════════════════════════════════════════════════════════════════
+
+    ▸ refactor the login flow, run the tests
+
+  ◆ The Forge speaks
+│   𓂀 carving: read_file…
+│   ✓ 𓋴 carved read_file  12ms
+│   ✓ 𓋴 carved apply_patch  48ms
+│   ✓ 𓋴 carved run_tests  3.2s
+│ Done — 3 files touched, all 14 tests pass.
+
+ 𓋴 FORGE > █
+  enter send · / commands · ctrl+c cancel turn · ctrl+c twice exit
+ 𓁈 claude-opus-5 │ 𓃀 sonnet-5 │ 𓋴 build │ 𓂋 workspace-write │ 𓆣 12.4k tok
 ```
+
+The **Pharaoh's Monument** theme ships by default (obsidian black, Pharaoh's
+Gold, Nile turquoise, papyrus white — see `/skin` for `pharaoh-indigo`,
+`forge`, `midnight`, and `paper`). Set `AGENTFORGE_GLYPHS=ascii` if your
+terminal lacks Egyptian-hieroglyph coverage.
 
 ## Install
 
@@ -49,7 +56,7 @@ Packages ship to npm under the `@agentforge-oss` scope — the CLI installs glob
 
 ```bash
 npm install -g @agentforge-oss/cli
-agentforge --version          # v0.7.0
+agentforge --version          # v0.1.0
 
 # or run it without installing
 npx @agentforge-oss/cli chat
@@ -335,14 +342,16 @@ for PR expectations. The roadmap is maintained as a truthful status document —
 
 ## Status
 
-AgentForge **v0.7.0** completes the multi-project adoption plan (four feature waves, 15 phases):
-persistent memory, an interceptor seam with a v2 plugin kernel, staged skills, observe-only
-reflection, prompt caching + live context compression, markdown agents with `task` delegation,
-structured permission rules with a doom-loop guard, NDJSON session logs with forking, an LSP
-bridge, profiles, a local-first observability core, security findings, session modes, an
-OpenAI-compatible gateway, a supervised daemon, deterministic benchmarks, webhook/Telegram
-channels, and desktop device tools — verified by ~290 deterministic tests. Experimental but
-hard at work; APIs may still change before 1.0.
+AgentForge carries the complete adoption-plan feature set — persistent memory, an interceptor
+seam with a v2 plugin kernel, staged skills, observe-only reflection, prompt caching + live
+context compression, markdown agents with `task` delegation, structured permission rules with
+a doom-loop guard, NDJSON session logs with forking, an LSP bridge, profiles, a local-first
+observability core, security findings, session modes, an OpenAI-compatible gateway, a
+supervised daemon, deterministic benchmarks, webhook/Telegram channels, desktop device tools,
+and the Pharaoh's Monument TUI with ez-start onboarding and live model discovery across 16
+providers — verified by ~282 deterministic tests. The 1.0 line begins at version `0.1.0`
+(in-repo; registry numbers were consumed by earlier development releases). Experimental but
+hard at work; APIs may still change.
 
 See [CHANGELOG.md](CHANGELOG.md) for the release history and
 [PROJECT_STATUS_AND_ROADMAP.md](PROJECT_STATUS_AND_ROADMAP.md) for the honest gap list.
