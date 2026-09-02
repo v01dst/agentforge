@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "description": "Model-agnostic AI agent runtime and visual workflow platform.",
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "Apache-2.0",
   "packageManager": "pnpm@9.15.5",
   "engines": {
     "node": ">=20.11.0"

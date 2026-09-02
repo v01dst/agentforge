@@ -2,7 +2,7 @@
   "name": "@agentforge-oss/sdk",
   "version": "0.1.0",
   "description": "Convenience SDK facade for AgentForge runtime packages.",
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "Apache-2.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -34,12 +34,12 @@
     <text x="198" y="188" text-anchor="middle" fill="#48C9B0">𓋹 16 providers</text>
     <rect x="268" y="172" width="100" height="24" rx="12" fill="none" stroke="#FFFFFF" stroke-opacity="0.14"/>
     <text x="318" y="188" text-anchor="middle" fill="#8E8E8E">local-first</text>
-    <rect x="378" y="172" width="92" height="24" rx="12" fill="none" stroke="#FFFFFF" stroke-opacity="0.14"/>
-    <text x="424" y="188" text-anchor="middle" fill="#8E8E8E">noncommercial</text>
+    <rect x="378" y="172" width="104" height="24" rx="12" fill="none" stroke="#FFFFFF" stroke-opacity="0.14"/>
+    <text x="430" y="188" text-anchor="middle" fill="#8E8E8E">Apache-2.0</text>
   </g>
 
   <text x="64" y="252" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="13.5" fill="#FDF5E6">npm install -g @agentforge-oss/cli</text>
-  <text x="64" y="274" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="12" fill="#5A5A5A">free for noncommercial use · commercial licenses on request</text>
+  <text x="64" y="274" font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="12" fill="#5A5A5A">Apache-2.0 · free for personal and commercial use</text>
 
   <!-- right: the Hall of Records terminal -->
   <g>

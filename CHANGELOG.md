@@ -4,6 +4,13 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### License: Apache-2.0 — free for commercial use
+
+- AgentForge is relicensed back to **Apache-2.0**: free to use, modify, and distribute for **any purpose, including commercial**. The PolyForm Noncommercial + paid-commercial-licensing arrangement is withdrawn.
+- All 12 `package.json` `license` fields return to `Apache-2.0`; the README badge, License section, banner chip, and CONTRIBUTING terms updated to match.
+
+### The Pharaoh's Monument TUI (1.0-line reset to 0.1.0)
+
 ### The Pharaoh's Monument TUI (1.0-line reset to 0.1.0)
 
 - **Ground-up TUI redesign** with a distinct identity — Ancient-Egyptian craftsmanship, monumental and calm:

@@ -2,7 +2,7 @@
   "name": "@agentforge-oss/cli",
   "version": "0.1.0",
   "description": "Developer CLI for AgentForge projects",
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "Apache-2.0",
   "type": "module",
   "bin": {
     "agentforge": "dist/bin.js"

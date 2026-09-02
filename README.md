@@ -9,7 +9,7 @@
 [![version](https://img.shields.io/badge/version-0.1.0-D4A017)](CHANGELOG.md)
 [![node](https://img.shields.io/badge/node-%E2%89%A520.11-339933?logo=node.js&logoColor=white)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-9-F69220?logo=pnpm&logoColor=white)](pnpm-workspace.yaml)
-[![license](https://img.shields.io/badge/license-noncommercial%20%2B%20commercial-orange)](LICENSE)
+[![license](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![tests](https://img.shields.io/badge/tests-passing-brightgreen)](.github/workflows)
 [![discord](https://img.shields.io/badge/discord-9p.1-5865F2?logo=discord&logoColor=white)](#-community)
 
@@ -363,12 +363,5 @@ See [CHANGELOG.md](CHANGELOG.md) for the release history and
 
 ## License
 
-AgentForge is free for **noncommercial** use under the
-[PolyForm Noncommercial 1.0.0](LICENSE) license: personal projects, research, education,
-and charitable/public-interest organizations — no payment, no permission needed.
-
-**Commercial use requires a paid license.** Using AgentForge for business purposes — in
-company products, internal tooling, consulting, or anything that generates revenue — needs
-a commercial license. Open a licensing inquiry at
-[github.com/v01dst/agentforge/issues](https://github.com/v01dst/agentforge/issues) to get
-commercial terms. The full terms are in [LICENSE](LICENSE).
+[Apache-2.0](LICENSE) — free to use, modify, and distribute, **including commercial use**.
+No paid license, no restrictions beyond the standard Apache 2.0 terms.
