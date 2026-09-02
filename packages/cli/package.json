@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-oss/cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Developer CLI for AgentForge projects",
   "license": "Apache-2.0",
   "type": "module",

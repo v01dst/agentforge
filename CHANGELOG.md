@@ -2,6 +2,16 @@
 
 All notable changes to AgentForge are documented here.
 
+## [Unreleased]
+
+### 1.0.1 — polish pass on user feedback
+
+- **Giza skyline in the header**: carved pyramid silhouettes (`▲ ▲▲▲`) above the cartouche.
+- **Default palette → `pharaoh-indigo`**: night-sky indigo ground, warmer gold `#E8C547`, cool stone-gray metadata. `pharaoh` (obsidian) remains on `/skin`.
+- **EzStart keyboard fixes**: Esc now works on every step (welcome → skip, model step → back to the picker, failed → welcome); while EzStart is open it exclusively owns the keyboard, so no keystrokes leak into the chat composer behind it.
+- **Usable after skip**: skipping or finishing setup always lands you in a working composer — browsing `/help`, `/tools`, `/agents` works with no model connected.
+- Tests: 285/285 (Esc-behavior and default-palette suites added).
+
 ## [1.0.0] — 2026-09-02
 
 The stable release. **First-run now actually enters the new experience** — 0.9.0 shipped the
