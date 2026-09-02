@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Static, Text, useInput } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { parseSlashCommand } from '../turn.js';
 import { useTurn } from '../useTurn.js';
 import type { ChatMessage } from '../useTurn.js';
@@ -158,28 +158,20 @@ function AgentBlock({ text, streaming }: { text: string; streaming?: boolean }):
   );
 }
 
-/** Tool activity as the Sculptor's Chisel: carving… becomes ✓ carved. */
+/** Live chisel: only in-flight tools. Completed ones live in the transcript. */
 function ToolTimeline({ events }: { events: ReadonlyArray<{ name: string; state: 'running' | 'done'; ms?: number; argsSummary?: string }> }): React.ReactElement {
-  if (!events.length) return <></>;
+  const running = events.filter((event) => event.state === 'running');
+  if (!running.length) return <></>;
   return (
     <Box flexDirection="column">
-      {events.map((event) =>
-        event.state === 'running' ? (
-          <Text key={`${event.name}-running`}>
-            <Text color={colors.thinking}>  {glyphs.eyeHorus} carving: </Text>
-            <Text color={colors.text}>{event.name}</Text>
-            {event.argsSummary ? <Text color={colors.dim}> {event.argsSummary.slice(0, 44)}</Text> : null}
-            <Text color={colors.thinking}>…</Text>
-          </Text>
-        ) : (
-          <Text key={`${event.name}-done`}>
-            <Text color={colors.dim}>  │ </Text>
-            <Text color={colors.uiOk}>✓ {glyphs.ankh} carved</Text>
-            <Text color={colors.text}> {event.name}</Text>
-            {event.ms !== undefined ? <Text color={colors.dim}>  {event.ms}ms</Text> : null}
-          </Text>
-        ),
-      )}
+      {running.map((event) => (
+        <Text key={`${event.name}-running`}>
+          <Text color={colors.thinking}>  {glyphs.eyeHorus} carving: </Text>
+          <Text color={colors.text}>{event.name}</Text>
+          {event.argsSummary ? <Text color={colors.dim}> {event.argsSummary.slice(0, 44)}</Text> : null}
+          <Text color={colors.thinking}>…</Text>
+        </Text>
+      ))}
     </Box>
   );
 }
@@ -223,8 +215,8 @@ function FooterHints(): React.ReactElement {
  */
 function HeaderCartouche({ provider, connected }: { provider?: string; connected: boolean }): React.ReactElement {
   const online = connected && Boolean(provider);
-  const columns = process.stdout.columns ?? 116;
-  const ruleWidth = Math.max(24, Math.min(116, columns - 4));
+  const columns = process.stdout.columns || 100;
+  const ruleWidth = Math.max(24, columns - 4);
   return (
     <Box flexDirection="column" marginBottom={1}>
       <Box justifyContent="space-between">
@@ -610,9 +602,7 @@ export function ChatHome({ runner, commands, onSlashCommand, provider, model, ac
   return (
     <Box flexDirection="column">
       <HeaderCartouche provider={provider} connected={!needsOnboarding} />
-      <Static items={messages}>
-        {(message, index) => <MessageRow key={index} message={message} />}
-      </Static>
+      {messages.map((message, index) => <MessageRow key={index} message={message} />)}
       {streamingText ? <AgentBlock text={streamingText} streaming /> : null}
       <ToolTimeline events={toolEvents} />
       {running ? <ActivityIndicator label={activity ?? 'working… (Ctrl-C to cancel)'} /> : null}

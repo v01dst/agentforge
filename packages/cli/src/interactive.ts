@@ -32,6 +32,20 @@ export async function launchInteractiveShell(options: { initialMessages?: import
   const [contributions, globalCfg] = await Promise.all([pluginContributions(), readGlobalConfig()]);
   const pluginHooks = contributions.hooks as never;
   const detectedProviderModel = detectDefaultProvider() ?? { provider: '', model: '' };
+  // EzStart onboarding: shown when nothing configures a model — no explicit
+  // provider, no provider env key, no credentials store entry, no managed endpoint.
+  let needsOnboarding = false;
+  if (!detectedProviderModel.provider) {
+    try {
+      const { readCredentials } = await import('./credentials.js');
+      const { readProviderEntries } = await import('./providers-store.js');
+      const creds = await readCredentials();
+      const entries = await readProviderEntries().catch(() => []);
+      needsOnboarding = Object.keys(creds.envs).length === 0 && entries.length === 0;
+    } catch {
+      needsOnboarding = true;
+    }
+  }
   const reflection = {
     enabled: globalCfg.reflection?.enabled === true,
     provider: globalCfg.reflection?.provider,
@@ -141,6 +155,7 @@ export async function launchInteractiveShell(options: { initialMessages?: import
       mode: detection.found ? 'project' : 'global',
       projectName,
       initialMessages: options.initialMessages,
+      needsOnboarding,
     });
 
   // Branded startup splash (~600ms), then the persistent TUI.

@@ -28,6 +28,8 @@ export interface TuiRootProps {
   initialMessages?: ChatMessage[];
   /** Disable latest-session auto-restore. */
   autoResume?: boolean;
+  /** True when no model provider is configured — routes first-run users to ez-start. */
+  needsOnboarding?: boolean;
 }
 
 /**
@@ -35,7 +37,7 @@ export interface TuiRootProps {
  * slash commands navigate to management screens or suspend into real CLI
  * commands. Screens are rendered in place; Esc returns to the conversation.
  */
-export function TuiRoot({ screens = {}, runner, provider, model, mode, projectName, runSuspended, onExit, initialMessages, autoResume }: TuiRootProps): React.ReactElement {
+export function TuiRoot({ screens = {}, runner, provider, model, mode, projectName, runSuspended, onExit, initialMessages, autoResume, needsOnboarding }: TuiRootProps): React.ReactElement {
   const [activeScreen, setActiveScreen] = useState<{ id: SlashScreen | null; arg?: string }>({ id: null });
 
   const handlers: SlashHandlers = useMemo(() => ({
@@ -83,6 +85,7 @@ export function TuiRoot({ screens = {}, runner, provider, model, mode, projectNa
         projectName={mode === 'project' ? projectName : undefined}
         initialMessages={initialMessages}
         autoResume={autoResume === false ? false : mode === 'project' || mode === 'global'}
+        needsOnboarding={needsOnboarding}
       />
     </Box>
   );

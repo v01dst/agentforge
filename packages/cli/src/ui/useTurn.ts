@@ -66,7 +66,11 @@ export function useTurn(runner: TurnRunner) {
           setStreamingText(text);
         }
         if (delta.tool) {
-          const tool = delta.tool;
+          // Runners may emit a terminal tool event without an explicit state;
+          // `ms` present implies completion.
+          const tool = delta.tool.state === undefined && delta.tool.ms !== undefined
+            ? { ...delta.tool, state: 'done' as const }
+            : delta.tool;
           setToolEvents((previous) => reduceToolEvents(previous, tool));
           if (tool.state === 'done') {
             setMessages((previous) => [...previous, {

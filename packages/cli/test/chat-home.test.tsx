@@ -164,7 +164,7 @@ test('tool-role messages render as dim tool-call lines with duration', async () 
   instance.stdin.write('\r');
   await delay(200);
   const frame = instance.lastFrame() ?? '';
-  assert.match(frame, /web_search\s+1200ms/);
+  assert.match(frame, /carved web_search\s+1200ms/);
   assert.match(frame, /searched/);
   instance.unmount();
 });

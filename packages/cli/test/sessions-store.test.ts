@@ -20,6 +20,8 @@ import {
 
 test('session store round-trips save/load/list/delete', async () => {
   const project = await mkdtemp(join(tmpdir(), 'agentforge-sessions-'));
+  const previousHome = process.env.HOME;
+  process.env.HOME = project; // isolate from ambient session stores
   try {
     const id = newSessionId();
     const session: StoredSession = {
@@ -105,6 +107,8 @@ test('renameSession updates the title in whichever store holds the session', asy
 
 test('pruneSessions removes by age and count, honours dry-run, returns removed ids', async () => {
   const project = await mkdtemp(join(tmpdir(), 'agentforge-sessions-'));
+  const previousHome = process.env.HOME;
+  process.env.HOME = project; // isolate from ambient session stores
   try {
     const base = { title: 't', createdAt: '', messages: [{ role: 'user' as const, text: 'hi' }] };
     const day = 24 * 60 * 60 * 1000;
@@ -129,7 +133,11 @@ test('pruneSessions removes by age and count, honours dry-run, returns removed i
     const survivors = await listSessions(project);
     assert.equal(survivors.length, 1);
     assert.equal(survivors[0]?.id, 's-new-1');
-  } finally { await rm(project, { recursive: true, force: true }); }
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    await rm(project, { recursive: true, force: true });
+  }
 });
 
 test('compactTranscript keeps the recent tail and summarizes older turns', () => {
@@ -163,6 +171,8 @@ test('compactTranscript clamps oversized summary lines', () => {
 
 test('corrupted session files are skipped by list/load rather than crashing', async () => {
   const project = await mkdtemp(join(tmpdir(), 'agentforge-sessions-'));
+  const previousHome = process.env.HOME;
+  process.env.HOME = project;
   try {
     const dir = join(project, '.agentforge', 'sessions');
     await mkdir(dir, { recursive: true });
@@ -172,7 +182,11 @@ test('corrupted session files are skipped by list/load rather than crashing', as
     const all = await listSessions(project);
     assert.deepEqual(all.map((entry) => entry.id), ['s-good-1']);
     assert.equal(await loadSession('s-broken', project), undefined);
-  } finally { await rm(project, { recursive: true, force: true }); }
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    await rm(project, { recursive: true, force: true });
+  }
 });
 
 test('locateSession reports the scope a session was found in', async () => {
