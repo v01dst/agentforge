@@ -57,6 +57,8 @@ export function useTurn(runner: TurnRunner) {
     const controller = new AbortController();
     controllerRef.current = controller;
     let text = '';
+    let latestUsage: number | undefined;
+    let runId: string | undefined;
     try {
       for await (const delta of runner(input, controller.signal, { skills })) {
         if (delta.text) {
@@ -74,8 +76,14 @@ export function useTurn(runner: TurnRunner) {
             }]);
           }
         }
-        if (delta.usage) setStatus((previous) => ({ ...previous, totalTokens: delta.usage?.totalTokens }));
-        if (delta.runId) setStatus((previous) => ({ ...previous, runId: delta.runId }));
+        if (delta.usage) latestUsage = delta.usage?.totalTokens;
+        if (delta.runId) runId = delta.runId;
+      }
+      // Apply status once after the loop: setState interleaved with a
+      // fast-settling generator stalls ink-testing-library's frame writer
+      // (lastFrame freezes even though React state advances).
+      if (latestUsage !== undefined || runId !== undefined) {
+        setStatus((previous) => ({ ...previous, totalTokens: latestUsage ?? previous.totalTokens, runId: runId ?? previous.runId }));
       }
       setStatus((previous) => ({ ...previous, elapsedMs: Date.now() - startedAt }));
       setMessages((previous) => [...previous, { role: 'assistant', text: text || '[empty response]' }]);

@@ -17,7 +17,7 @@ export interface AgentForgeConfig {
   providers?: readonly (string | NamedEntry)[];
   /** Optional custom provider module or provider name used by project tooling. */
   provider?: string;
-  /** Preferred model for interactive sessions, e.g. `'gpt-4o-mini'` or `{ provider, model }`. */
+  /** Preferred model for interactive sessions (a model id from the provider's live list). */
   model?: string | ModelSelection;
   tools?: readonly (string | NamedEntry)[];
   workflows?: readonly (string | NamedEntry)[];

@@ -1,5 +1,5 @@
 import type { TurnRunner } from './ui/turn.js';
-import { createModel } from '@agentforge-oss/models';
+import { createModel, DEFAULT_MODEL_IDS } from '@agentforge-oss/models';
 import { resolveCredential } from './credentials.js';
 import type { ProviderPreset } from './providers-catalog.js';
 
@@ -26,18 +26,18 @@ export interface ResolvedRunner {
  * or the ~/.agentforge/credentials.json store).
  */
 const PROVIDER_PRIORITY: ReadonlyArray<{ id: string; env: string; model: string }> = [
-  { id: 'anthropic', env: 'ANTHROPIC_API_KEY', model: 'claude-opus-5' },
-  { id: 'openai', env: 'OPENAI_API_KEY', model: 'gpt-5.6-sol' },
-  { id: 'google', env: 'GEMINI_API_KEY', model: 'gemini-2.0-flash' },
-  { id: 'google', env: 'GOOGLE_API_KEY', model: 'gemini-2.0-flash' },
+  { id: 'anthropic', env: 'ANTHROPIC_API_KEY', model: DEFAULT_MODEL_IDS.anthropic },
+  { id: 'openai', env: 'OPENAI_API_KEY', model: DEFAULT_MODEL_IDS.openai },
+  { id: 'google', env: 'GEMINI_API_KEY', model: DEFAULT_MODEL_IDS.google },
+  { id: 'google', env: 'GOOGLE_API_KEY', model: DEFAULT_MODEL_IDS.google },
 ];
 
 function guessModel(provider: string): string {
   switch (provider) {
-    case 'openai': return 'gpt-5.6-sol';
-    case 'anthropic': return 'claude-opus-5';
-    case 'google': case 'gemini': return 'gemini-2.0-flash';
-    default: return 'gpt-5.6-sol';
+    case 'openai': return DEFAULT_MODEL_IDS.openai;
+    case 'anthropic': return DEFAULT_MODEL_IDS.anthropic;
+    case 'google': case 'gemini': return DEFAULT_MODEL_IDS.google;
+    default: return DEFAULT_MODEL_IDS.openai;
   }
 }
 

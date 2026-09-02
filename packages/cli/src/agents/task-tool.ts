@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Agent, type ToolLike } from '@agentforge-oss/core';
-import { createModel } from '@agentforge-oss/models';
+import { createModel, DEFAULT_MODEL_IDS } from '@agentforge-oss/models';
 import type { AgentInfo, AgentPermission } from './agents.js';
 import { getAgentSync } from './agents.js';
 import { applyWorkspacePolicy, type ApprovalRequest, type ApprovalDecision } from '../permissions.js';
@@ -56,7 +56,7 @@ function childToolset(agent: AgentInfo, options: TaskToolOptions): ToolLike[] {
 function resolveBackingModel(options: TaskToolOptions, agent: AgentInfo): unknown {
   if (options.modelInstance) return options.modelInstance;
   try {
-    return createModel({ provider: (options.provider ?? 'anthropic') as never, model: agent.model ?? options.model ?? 'claude-3-5-sonnet-latest' });
+    return createModel({ provider: (options.provider ?? 'anthropic') as never, model: agent.model ?? options.model ?? DEFAULT_MODEL_IDS.anthropic });
   } catch {
     return undefined;
   }

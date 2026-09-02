@@ -3,6 +3,18 @@ import type { Message, ModelChunk, ModelProvider, ModelRequest, ModelResponse, T
 export interface HttpModelOptions { apiKey?: string; baseUrl?: string; fetch?: typeof globalThis.fetch; headers?: Record<string, string>; }
 
 /** Typed HTTP failure so callers can classify retries instead of parsing messages. */
+/**
+ * Default model ids per protocol, verified against provider docs (2026-09).
+ * Prefer live discovery (`listProviderModels`) at runtime — these are only
+ * fallbacks for when an endpoint does not implement listing.
+ */
+export const DEFAULT_MODEL_IDS = {
+  openai: 'gpt-5.6-sol',
+  anthropic: 'claude-opus-5',
+  google: 'gemini-2.0-flash',
+  openaiCompatible: 'openrouter/auto',
+} as const;
+
 export class ModelHttpError extends Error {
   constructor(
     public readonly status: number,
@@ -28,7 +40,7 @@ export class OpenAIModel implements ModelProvider {
   readonly model: string;
   private readonly fetcher: typeof globalThis.fetch;
   private readonly options: HttpModelOptions;
-  constructor(options: { model?: string } & HttpModelOptions = {}) { this.model = options.model ?? 'gpt-4o-mini'; this.options = options; this.fetcher = options.fetch ?? globalThis.fetch; }
+  constructor(options: { model?: string } & HttpModelOptions = {}) { this.model = options.model ?? DEFAULT_MODEL_IDS.openai; this.options = options; this.fetcher = options.fetch ?? globalThis.fetch; }
   async generate(request: ModelRequest): Promise<ModelResponse> {
     const apiKey = this.options.apiKey ?? process.env.OPENAI_API_KEY;
     if (!apiKey && !this.options.baseUrl) throw new Error('OPENAI_API_KEY is required for the OpenAI provider');
@@ -100,7 +112,7 @@ export class AnthropicModel implements ModelProvider {
   readonly model: string;
   private readonly fetcher: typeof globalThis.fetch;
   private readonly options: HttpModelOptions;
-  constructor(options: { model?: string } & HttpModelOptions = {}) { this.model = options.model ?? 'claude-3-5-sonnet-latest'; this.options = options; this.fetcher = options.fetch ?? globalThis.fetch; }
+  constructor(options: { model?: string } & HttpModelOptions = {}) { this.model = options.model ?? DEFAULT_MODEL_IDS.anthropic; this.options = options; this.fetcher = options.fetch ?? globalThis.fetch; }
   async generate(request: ModelRequest): Promise<ModelResponse> {
     const apiKey = this.options.apiKey ?? process.env.ANTHROPIC_API_KEY;
     if (!apiKey) throw new Error('ANTHROPIC_API_KEY is required for the Anthropic provider');
@@ -190,7 +202,7 @@ export class GeminiModel implements ModelProvider {
   readonly model: string;
   private readonly fetcher: typeof globalThis.fetch;
   private readonly options: HttpModelOptions;
-  constructor(options: { model?: string } & HttpModelOptions = {}) { this.model = options.model ?? 'gemini-1.5-flash'; this.options = options; this.fetcher = options.fetch ?? globalThis.fetch; }
+  constructor(options: { model?: string } & HttpModelOptions = {}) { this.model = options.model ?? DEFAULT_MODEL_IDS.google; this.options = options; this.fetcher = options.fetch ?? globalThis.fetch; }
   async generate(request: ModelRequest): Promise<ModelResponse> {
     const key = this.options.apiKey ?? process.env.GOOGLE_API_KEY ?? process.env.GEMINI_API_KEY ?? '';
     if (!key) throw new Error('GOOGLE_API_KEY or GEMINI_API_KEY is required for the Gemini provider');
@@ -271,7 +283,7 @@ export type ProviderProtocol = 'openai' | 'anthropic' | 'google' | 'gemini' | 'o
 export interface ProviderDefinition {
   name?: string;
   protocol: ProviderProtocol;
-  /** Default model id for this endpoint, e.g. `gpt-4o-mini`. */
+  /** Default model id for this endpoint. */
   model?: string;
   /** Endpoint root, e.g. `https://openrouter.ai/api/v1`. Required for openai-compatible. */
   baseUrl?: string;

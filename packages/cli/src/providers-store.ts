@@ -72,6 +72,7 @@ export interface AddProviderOptions extends Omit<ProviderEntry, 'name'> {
 
 /** Insert or update a sidecar entry; returns whether an existing entry was replaced. */
 export async function addProviderEntry(name: string, options: AddProviderOptions, cwd = process.cwd()): Promise<{ replaced: boolean; entry: ProviderEntry }> {
+  if (process.env.AGENTFORGE_DEBUG_STORE === '1') console.error('[store-dbg] addProviderEntry', name, 'cwd=', cwd, '\n', new Error().stack?.split('\n').slice(1, 6).join('\n'));
   const entries = await readProviderEntries(cwd);
   const existingIndex = entries.findIndex((entry) => entry.name === name);
   if (existingIndex >= 0 && !options.force) {

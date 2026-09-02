@@ -57,8 +57,41 @@ const FORGE_COLORS: SkinPalette = {
   prompt: '#FFF8DC',
 };
 
-const MIDNIGHT_COLORS: SkinPalette = {
-  bannerTitle: '#22d3ee',
+/**
+ * Pharaoh's Monument: obsidian black, Pharaoh's Gold, Nile turquoise, and
+ * papyrus white — eternal, unshakable, carved in stone.
+ */
+const PHARAOH_COLORS: SkinPalette = {
+  bannerTitle: '#D4A017',
+  bannerAccent: '#C99A2A',
+  bannerDim: '#8E8E8E',
+  bannerBorder: '#C99A2A',
+  bannerText: '#FDF5E6',
+  uiAccent: '#48C9B0',
+  uiOk: '#48C9B0',
+  uiError: '#E67E22',
+  uiWarn: '#E67E22',
+  uiTool: '#48C9B0',
+  uiThinking: '#E67E22',
+  uiLabel: '#D4A017',
+  diffAddedWord: '#48C9B0',
+  diffRemovedWord: '#E67E22',
+  diffAddedBg: '#0E2A26',
+  diffRemovedBg: '#33200E',
+  syntaxString: '#C99A2A',
+  syntaxNumber: '#FDF5E6',
+  syntaxKeyword: '#D4A017',
+  syntaxComment: '#8E8E8E',
+  prompt: '#FDF5E6',
+};
+
+/** Same monument on a night-sky indigo background. */
+const PHARAOH_INDIGO_COLORS: SkinPalette = {
+  ...PHARAOH_COLORS,
+  bannerText: '#F5EFE0',
+};
+
+const MIDNIGHT_COLORS: SkinPalette = {  bannerTitle: '#22d3ee',
   bannerAccent: '#818cf8',
   bannerDim: '#64748b',
   bannerBorder: '#334155',
@@ -106,12 +139,14 @@ const PAPER_COLORS: SkinPalette = {
 };
 
 export const BUILT_IN_SKINS: Record<string, Skin> = {
-  forge: { name: 'forge', description: 'Gold/amber — the forge identity', colors: FORGE_COLORS },
+  pharaoh: { name: 'pharaoh', description: "Pharaoh's Monument — gold on obsidian, pillars of turquoise", colors: PHARAOH_COLORS },
+  'pharaoh-indigo': { name: 'pharaoh-indigo', description: 'Pharaoh on night-sky indigo', colors: PHARAOH_INDIGO_COLORS },
+  forge: { name: 'forge', description: 'Gold/amber — the classic forge identity', colors: FORGE_COLORS },
   midnight: { name: 'midnight', description: 'Cyan/indigo on deep slate', colors: MIDNIGHT_COLORS },
   paper: { name: 'paper', description: 'Light-terminal friendly', colors: PAPER_COLORS },
 };
 
-export const DEFAULT_SKIN_NAME = 'forge';
+export const DEFAULT_SKIN_NAME = 'pharaoh';
 
 const PALETTE_KEYS = Object.keys(FORGE_COLORS) as Array<keyof SkinPalette>;
 

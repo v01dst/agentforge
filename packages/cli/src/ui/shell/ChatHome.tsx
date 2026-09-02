@@ -7,6 +7,7 @@ import type { TurnRunner } from '../turn.js';
 import { ActivityIndicator } from './Activity.js';
 import { colors } from './theme.js';
 import { fuzzyScore } from './palette.js';
+import { glyphs, templeRule } from './theme.js';
 import { currentSessionMode } from '../../modes/session-modes.js';
 import { currentPermissionMode } from '../../permissions.js';
 import { listSessions, loadSession, newSessionId, renameSession, saveSession, SESSION_SCHEMA_VERSION, compactTranscript } from '../../sessions/store.js';
@@ -92,63 +93,90 @@ function wrapText(text: string, width: number): string[] {
 }
 
 /**
- * One conversational message rendered as a modern block (0.8 redesign):
- * a role chip + wrapped content, separated by whitespace — no more
- * `you ›` text prefixes. System notes stay compact one-liners.
+ * The Hall of Records (Pharaoh redesign): user messages lean right under a
+ * gold \`▸\`, agent words stand between turquoise pillars, system notes are
+ * chiselled in stone gray, completed tools read \`✓ 𓋴 carved\`.
  */
 function MessageRow({ message }: { message: ChatMessage }): React.ReactElement {
   if (message.role === 'system') {
-    return <Text dimColor>  · {message.text.replace(/\n/g, ' · ')}</Text>;
+    return <Text color={colors.dim}>  {glyphs.noteMark} {message.text.replace(/\n/g, ' · ')}</Text>;
   }
   if (message.role === 'tool') {
     const ms = message.meta?.ms;
     return (
-      <Text color={colors.tool}>
-        {'  ├ '}{message.meta?.tool ?? message.text}
-        {ms !== undefined ? `  ${ms}ms` : ''}
+      <Text>
+        <Text color={colors.dim}>{'  │ '}</Text>
+        <Text color={colors.uiOk}>✓ {glyphs.ankh} carved</Text>
+        <Text color={colors.text}> {message.meta?.tool ?? message.text}</Text>
+        {ms !== undefined ? <Text color={colors.dim}>  {ms}ms</Text> : null}
       </Text>
     );
   }
   if (message.role === 'user') {
+    const lines = wrapText(message.text, 92);
     return (
-      <Box flexDirection="column" marginTop={0}>
-        <Text><Text bold color={colors.uiOk}>YOU</Text><Text dimColor> ──</Text></Text>
-        {wrapText(message.text, 100).map((line, index) => <Text key={index}>  {line}</Text>)}
+      <Box flexDirection="column" marginTop={1}>
+        {lines.map((line, index) => (
+          <Text key={index}>
+            <Text>    </Text>
+            <Text color={colors.label}>{index === 0 ? `${glyphs.userMark} ` : '  '}</Text>
+            <Text color={colors.text}>{line}</Text>
+          </Text>
+        ))}
       </Box>
     );
   }
+  const lines = wrapText(message.text, 92);
   return (
-    <Box flexDirection="column" marginTop={0}>
-      <Text><Text bold color={colors.accent}>AGENT</Text><Text dimColor> ──</Text></Text>
-      {wrapText(message.text, 100).map((line, index) => <Text key={index}>  {line}</Text>)}
-      <Text> </Text>
+    <Box flexDirection="column" marginTop={1}>
+      <Text>  <Text color={colors.accent}>{glyphs.agentMark}</Text> <Text bold color={colors.accent}>The Forge speaks</Text></Text>
+      {lines.map((line, index) => (
+        <Text key={index}>
+          <Text color={colors.border}>{glyphs.pillar}</Text>
+          <Text color={colors.text}> {line}</Text>
+        </Text>
+      ))}
+      <Text>  <Text color={colors.border}>{glyphs.pillar}</Text></Text>
     </Box>
   );
 }
 
-/** Live agent output while the turn streams. */
+/** Live agent output while the turn streams — the chisel still moving. */
 function AgentBlock({ text, streaming }: { text: string; streaming?: boolean }): React.ReactElement {
+  const lines = wrapText(text, 92);
   return (
-    <Box flexDirection="column" marginTop={0}>
-      <Text><Text bold color={colors.accent}>AGENT</Text>{streaming ? <Text dimColor> ── thinking…</Text> : <Text dimColor> ──</Text>}</Text>
-      {wrapText(text, 100).map((line, index) => <Text key={index}>  {line}</Text>)}
+    <Box flexDirection="column" marginTop={1}>
+      <Text>  <Text color={colors.accent}>{glyphs.agentMark}</Text> <Text bold color={colors.accent}>The Forge speaks</Text>{streaming ? <Text color={colors.thinking}> — the chisel moves…</Text> : null}</Text>
+      {lines.map((line, index) => (
+        <Text key={index}>
+          <Text color={colors.border}>{glyphs.pillar}</Text>
+          <Text color={colors.text}> {line}</Text>
+        </Text>
+      ))}
+      <Text>  <Text color={colors.border}>{glyphs.pillar}</Text></Text>
     </Box>
   );
 }
 
-/** Tool activity as a vertical timeline: `├ ✓ name 12ms`. */
+/** Tool activity as the Sculptor's Chisel: carving… becomes ✓ carved. */
 function ToolTimeline({ events }: { events: ReadonlyArray<{ name: string; state: 'running' | 'done'; ms?: number; argsSummary?: string }> }): React.ReactElement {
   if (!events.length) return <></>;
   return (
     <Box flexDirection="column">
       {events.map((event) =>
         event.state === 'running' ? (
-          <Text key={`${event.name}-running`} color={colors.tool}>
-            {'  ├ ⠿ '}{event.name}{event.argsSummary ? ` ${event.argsSummary.slice(0, 48)}` : ''}
+          <Text key={`${event.name}-running`}>
+            <Text color={colors.thinking}>  {glyphs.eyeHorus} carving: </Text>
+            <Text color={colors.text}>{event.name}</Text>
+            {event.argsSummary ? <Text color={colors.dim}> {event.argsSummary.slice(0, 44)}</Text> : null}
+            <Text color={colors.thinking}>…</Text>
           </Text>
         ) : (
-          <Text key={`${event.name}-done`} color={colors.uiOk}>
-            {'  ├ ✓ '}{event.name}{event.ms !== undefined ? `  ${event.ms}ms` : ''}
+          <Text key={`${event.name}-done`}>
+            <Text color={colors.dim}>  │ </Text>
+            <Text color={colors.uiOk}>✓ {glyphs.ankh} carved</Text>
+            <Text color={colors.text}> {event.name}</Text>
+            {event.ms !== undefined ? <Text color={colors.dim}>  {event.ms}ms</Text> : null}
           </Text>
         ),
       )}
@@ -156,43 +184,87 @@ function ToolTimeline({ events }: { events: ReadonlyArray<{ name: string; state:
   );
 }
 
-/** Inline error — tinted lines, no oversized border box. */
+/** Inline error — sand-tinted chiselled lines. */
 function InlineError({ message }: { message: string }): React.ReactElement {
   return (
-    <Box flexDirection="column" marginTop={0}>
-      {wrapText(message, 98).map((line, index) => <Text key={index} color={colors.error}>  ✗ {index === 0 ? '' : '  '}{line}</Text>)}
-      <Text dimColor>  try /doctor or /help</Text>
+    <Box flexDirection="column" marginTop={1}>
+      {wrapText(message, 92).map((line, index) => (
+        <Text key={index} color={colors.error}>  {glyphs.pillar} {line}</Text>
+      ))}
+      <Text color={colors.dim}>  {glyphs.noteMark} try /doctor or /help</Text>
     </Box>
   );
 }
 
-/** Slash suggestion menu with fuzzy-ranked rows and detail hints. */
+/** Slash suggestion menu with fuzzy-ranked rows, gold selection. */
 function SlashMenu({ filtered, clampedIndex, empty }: { filtered: readonly SlashCommand[]; clampedIndex: number; empty: boolean }): React.ReactElement {
-  if (empty) return <Text dimColor>  (no matching commands)</Text>;
+  if (empty) return <Text color={colors.dim}>  (no matching commands)</Text>;
   return (
     <Box flexDirection="column">
       {filtered.slice(0, 9).map((command, position) => (
-        <Text key={command.name} color={position === clampedIndex ? colors.accent : undefined}>
-          {position === clampedIndex ? '  ❯ /' : '    /'}{command.name}
-          {command.usage ? <Text dimColor> {command.usage}</Text> : null}
-          <Text dimColor> — {command.description}</Text>
+        <Text key={command.name} color={position === clampedIndex ? colors.label : colors.dim}>
+          {position === clampedIndex ? '  ' + glyphs.userMark + ' /' : '    /'}{command.name}
+          {command.usage ? <Text color={colors.dim}> {command.usage}</Text> : null}
+          <Text color={colors.dim}> — {command.description}</Text>
         </Text>
       ))}
     </Box>
   );
 }
 
-/** Footer key hints. */
+/** Footer key hints — chiselled in stone. */
 function FooterHints(): React.ReactElement {
-  return <Text dimColor>  enter send · / commands · ctrl+c cancel turn · ctrl+c twice exit</Text>;
+  return <Text color={colors.dim}>  enter send · / commands · ctrl+c cancel turn · ctrl+c twice exit</Text>;
 }
 
+/**
+ * The Cartouche (header): `𓂀  AGENTFORGE  𓋴` in gold over a ═══ temple
+ * base, `𓋹 ONLINE` in turquoise when a model is connected (sand otherwise).
+ */
+function HeaderCartouche({ provider, connected }: { provider?: string; connected: boolean }): React.ReactElement {
+  const online = connected && Boolean(provider);
+  const columns = process.stdout.columns ?? 116;
+  const ruleWidth = Math.max(24, Math.min(116, columns - 4));
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      <Box justifyContent="space-between">
+        <Text bold color={colors.bannerTitle}>{glyphs.eyeHorus}  AGENTFORGE  {glyphs.ankh}</Text>
+        <Text color={online ? colors.uiOk : colors.thinking}>{online ? `${glyphs.online} ONLINE` : `${glyphs.scribe} OFFLINE`}</Text>
+      </Box>
+      <Text color={colors.bannerTitle}>{templeRule(ruleWidth)}</Text>
+    </Box>
+  );
+}
+
+/**
+ * The Scribe's Tablet (status bar): one dark, anchored line carrying
+ * provider, model, session mode, posture, and the token count.
+ */
+export function ScribesTablet({ provider, model, projectName, totalTokens }: { provider?: string; model?: string; projectName?: string; totalTokens?: number }): React.ReactElement {
+  let sessionMode: string | undefined;
+  let posture: string | undefined;
+  try {
+    sessionMode = currentSessionMode();
+    posture = currentPermissionMode();
+  } catch { /* tablet degrades gracefully */ }
+  const tokens = totalTokens !== undefined
+    ? totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}k` : String(totalTokens)
+    : undefined;
+  return (
+    <Box>
+      <Text color={colors.bannerTitle}>
+        {' '}{glyphs.scribe} {provider ?? 'no-provider'} │ {glyphs.owl} {model ?? '—'} │ {glyphs.ankh} {sessionMode ?? '—'} │ {glyphs.reed} {posture ?? '—'}{projectName ? ` │ project:${projectName}` : ''}{tokens ? ` │ ${glyphs.scarab} ${tokens} tok` : ''}{' '}
+      </Text>
+    </Box>
+  );
+}
 /**
  * Chat-first home screen: a persistent chat interface with live streaming,
  * inline slash-command suggestions above the input, and a status bar.
  */
 export function ChatHome({ runner, commands, onSlashCommand, provider, model, activity, projectName, needsOnboarding = false, onProviderConnected, initialInput, autoResume = true, initialMessages }: ChatHomeProps) {
   const { messages, streamingText, running, status, lastError, toolEvents, send, cancel, clear, pushSystem, hydrate } = useTurn(runner);
+  if (process.env.AGENTFORGE_DEBUG_TABLET === '1') console.error('[chat-dbg] render tokens=', status.totalTokens, 'running=', running, 'msgs=', messages.length);
   const sessionIdRef = useRef(newSessionId());
   const restoredRef = useRef(false);
   /** Custom title set via /rename; autosave preserves it instead of re-deriving. */
@@ -537,13 +609,7 @@ export function ChatHome({ runner, commands, onSlashCommand, provider, model, ac
 
   return (
     <Box flexDirection="column">
-      <HeaderChips
-        provider={provider}
-        model={model}
-        projectName={projectName}
-        totalTokens={status.totalTokens}
-        elapsedMs={status.elapsedMs}
-      />
+      <HeaderCartouche provider={provider} connected={!needsOnboarding} />
       <Static items={messages}>
         {(message, index) => <MessageRow key={index} message={message} />}
       </Static>
@@ -568,48 +634,19 @@ export function ChatHome({ runner, commands, onSlashCommand, provider, model, ac
           empty={filtered.length === 0}
         />
       ) : null}
-      <Box borderStyle="round" borderColor={colors.border} paddingX={1}>
-        <Text color={colors.accent}>❯ </Text>
-        <Text>{input}</Text>
-        <Text dimColor>▏</Text>
+      {/* The Offering: pitch-black input row, gold FORGE prompt, turquoise cursor. */}
+      <Box marginTop={1} paddingLeft={1} paddingRight={1}>
+        <Text color={colors.bannerTitle}>{glyphs.prompt}</Text>
+        <Text color={colors.text}>{input}</Text>
+        <Text color={colors.uiOk}>█</Text>
       </Box>
       <FooterHints />
-    </Box>
-  );
-}
-
-/** Sticky header: brand + live status chips (model, session mode, posture, tokens). */
-function HeaderChips({
-  provider,
-  model,
-  projectName,
-  totalTokens,
-  elapsedMs,
-}: {
-  provider?: string;
-  model?: string;
-  projectName?: string;
-  totalTokens?: number;
-  elapsedMs?: number;
-}): React.ReactElement {
-  const tokens = totalTokens !== undefined
-    ? totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}k tok` : `${totalTokens} tok`
-    : undefined;
-  let sessionMode: string | undefined;
-  let posture: string | undefined;
-  try {
-    sessionMode = currentSessionMode();
-    posture = currentPermissionMode();
-  } catch { /* chips degrade gracefully */ }
-  return (
-    <Box flexWrap="wrap" columnGap={1}>
-      <Text bold color={colors.bannerTitle}>◆ AgentForge</Text>
-      {provider || model ? <Text dimColor>[{[provider, model].filter(Boolean).join('/')}]</Text> : null}
-      {sessionMode ? <Text color={colors.accent}>[{sessionMode}]</Text> : null}
-      {posture ? <Text color={colors.tool}>[{posture}]</Text> : null}
-      {projectName ? <Text dimColor>[project:{projectName}]</Text> : null}
-      {tokens ? <Text dimColor>[{tokens}]</Text> : null}
-      {elapsedMs !== undefined && elapsedMs > 0 ? <Text dimColor>[{(elapsedMs / 1000).toFixed(1)}s]</Text> : null}
+      <ScribesTablet
+        provider={provider}
+        model={model}
+        projectName={projectName}
+        totalTokens={status.totalTokens}
+      />
     </Box>
   );
 }

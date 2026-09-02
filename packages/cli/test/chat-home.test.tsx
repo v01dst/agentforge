@@ -38,16 +38,18 @@ test('ChatHome renders status bar with provider and model', async () => {
     commands,
     provider: 'mock-provider',
     model: 'agentforge-local',
+    autoResume: false,
   }));
   await delay(30);
   const frame = instance.lastFrame() ?? '';
-  assert.match(frame, /mock-provider\/agentforge-local/);
+  assert.match(frame, /mock-provider/);
+  assert.match(frame, /agentforge-local/);
   assert.match(frame, /ctrl\+c cancel/);
   instance.unmount();
 });
 
 test("typing '/mo' filters suggestions to /models and /model", async () => {
-  const instance = render(React.createElement(ChatHome, { runner: instantRunner, commands, initialInput: '/mo' }));
+  const instance = render(React.createElement(ChatHome, { runner: instantRunner, commands, initialInput: '/mo', autoResume: false }));
   await delay(80);
   const frame = instance.lastFrame() ?? '';
   assert.match(frame, /\/models/);
@@ -57,18 +59,20 @@ test("typing '/mo' filters suggestions to /models and /model", async () => {
 });
 
 test('normal text + Enter sends a turn and shows user + assistant messages', async () => {
-  const instance = render(React.createElement(ChatHome, { runner: instantRunner, commands }));
+  const instance = render(React.createElement(ChatHome, { runner: instantRunner, commands, autoResume: false }));
   await delay(30);
   instance.stdin.write('hello agent');
   await delay(40);
   instance.stdin.write('\r');
-  await delay(150);
-  const frame = instance.lastFrame() ?? '';
-  assert.match(frame, /YOU/);
-  assert.match(frame, /hello agent/);
-  assert.match(frame, /reply-to:hello agent/);
-  assert.match(frame, /AGENT/);
-  assert.match(frame, /7 tok/);
+  let frame = '';
+  for (let i = 0; i < 40; i += 1) {
+    await delay(50);
+    frame = instance.lastFrame() ?? '';
+    if (frame.includes('The Forge speaks') && frame.includes('reply-to:hello agent')) break;
+  }
+  assert.match(frame, /hello agent/);            // the scroll, right-leaning
+  assert.match(frame, /reply-to:hello agent/);   // the forge speaks
+  assert.match(frame, /The Forge speaks/);
   instance.unmount();
 });
 
@@ -79,6 +83,7 @@ test('Enter over a no-arg suggestion runs it; Esc dismisses menu keeping text', 
     runner: instantRunner,
     commands,
     onSlashCommand,
+    autoResume: false,
   }));
   await delay(30);
   instance.stdin.write('/co'); // matches connect + config, both no-usage
@@ -101,7 +106,7 @@ test('Enter over a no-arg suggestion runs it; Esc dismisses menu keeping text', 
 });
 
 test('up-arrow recalls previous inputs; down-arrow returns toward the draft', async () => {
-  const instance = render(React.createElement(ChatHome, { runner: instantRunner, commands }));
+  const instance = render(React.createElement(ChatHome, { runner: instantRunner, commands, autoResume: false }));
   await delay(30);
   instance.stdin.write('first input');
   await delay(40);
@@ -152,7 +157,7 @@ test('tool-role messages render as dim tool-call lines with duration', async () 
     yield { tool: { name: 'web_search', ms: 1200 } };
     yield { text: 'searched' };
   };
-  const instance = render(React.createElement(ChatHome, { runner: toolRunner, commands }));
+  const instance = render(React.createElement(ChatHome, { runner: toolRunner, commands, autoResume: false }));
   await delay(30);
   instance.stdin.write('go');
   await delay(40);

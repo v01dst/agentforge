@@ -86,7 +86,7 @@ test('aliases resolve: /quit routes to exit handler', async () => {
   const quit = findCommand(registry, 'quit');
   assert.ok(quit, '/quit did not resolve via aliases');
   assert.equal(quit.name, 'exit');
-  await voidify(dispatchSlash(registry, '/quit', ctx));
+  await dispatchSlash(registry, '/quit', ctx);
   assert.equal(ctx.exits, 1);
 });
 
@@ -96,12 +96,12 @@ test('project-gated commands in global mode explain instead of throwing, with /n
   for (const name of ['agents', 'workflows']) {
     const command = findCommand(registry, name);
     assert.ok(command);
-    await voidify(dispatchSlash(registry, `/${name}`, ctx));
+    await dispatchSlash(registry, `/${name}`, ctx);
     const joined = ctx.system.join('\n');
     assert.match(joined, /\/new/, `${name} should hint at /new`);
   }
   // runs/inspect explain that runs are per-project
-  await voidify(dispatchSlash(registry, '/runs', ctx));
+  await dispatchSlash(registry, '/runs', ctx);
   assert.match(ctx.system.join('\n'), /no runs — runs are stored per project/);
 });
 
@@ -133,7 +133,7 @@ test('dispatcher converts handler errors into a system message', async () => {
 test('/version prints the VERSION from commands.js', async () => {
   const ctx = stubCtx();
   const registry = buildSlashRegistry(ctx);
-  await voidify(dispatchSlash(registry, '/version', ctx));
+  await dispatchSlash(registry, '/version', ctx);
   const { VERSION } = await import('../src/commands.js');
   assert.ok(ctx.system.at(-1)?.includes(VERSION), `expected VERSION (${VERSION}) in "${ctx.system.at(-1)}"`);
 });
@@ -148,10 +148,10 @@ test('/cd without argument changes cwd to HOME (tmp HOME)', async () => {
     process.env.HOME = fakeHome;
     const ctx = stubCtx();
     const registry = buildSlashRegistry(ctx);
-    await voidify(dispatchSlash(registry, '/cd', ctx));
+    await dispatchSlash(registry, '/cd', ctx);
     assert.equal(resolve(process.cwd()), resolve(fakeHome));
     assert.ok(ctx.system.some((text) => text.includes('cwd →')));
-    assert.equal(ctx.refreshed, 1);
+    assert.equal(ctx.refreshed, 1); // /cd refreshes once after the cwd change
   } finally {
     process.chdir(previousCwd);
     if (previousHome === undefined) delete process.env.HOME;
@@ -167,23 +167,22 @@ test('/model with arg calls setSessionModel; unknown model is rejected politely'
     const ctx = stubCtx({ mode: () => 'project' });
     const registry = buildSlashRegistry(ctx);
 
-    // Unknown name → no setSessionModel, explanatory message.
-    await voidify(dispatchSlash(registry, '/model totally-not-a-model-xyz', ctx));
-    assert.deepEqual(ctx.models, []);
+    // Any model id is accepted — the model list comes live from the
+    // provider endpoint, so no static list can gate it.
+    await dispatchSlash(registry, '/model totally-not-a-model-xyz', ctx);
+    assert.deepEqual(ctx.models, ['totally-not-a-model-xyz']);
+    assert.equal(process.env.AGENTFORGE_MODEL, 'totally-not-a-model-xyz');
 
-    // A built-in model name from buildModelReport must be accepted.
-    const { buildModelReport } = await import('../src/session.js');
-    const builtin = buildModelReport().find((row) => row.source === 'builtin');
-    assert.ok(builtin, 'buildModelReport returned no builtin rows');
-    await voidify(dispatchSlash(registry, `/model ${builtin.provider}`, ctx));
-    assert.deepEqual(ctx.models, [builtin.provider]);
-    assert.equal(process.env.AGENTFORGE_MODEL, builtin.provider);
-    assert.equal(ctx.refreshed, 1);
+    // A second dispatch replaces it; both refresh the status line.
+    await dispatchSlash(registry, '/model gpt-5.6-sol', ctx);
+    assert.deepEqual(ctx.models.at(-1), 'gpt-5.6-sol');
+    assert.equal(process.env.AGENTFORGE_MODEL, 'gpt-5.6-sol');
+    assert.equal(ctx.refreshed, 2); // both accepted dispatches refresh; the no-arg view does not
 
     // No arg → shows current model without changing it.
-    await voidify(dispatchSlash(registry, '/model', ctx));
-    assert.deepEqual(ctx.models, [builtin.provider]);
-    assert.match(ctx.system.at(-1) ?? '', new RegExp(builtin.provider));
+    await dispatchSlash(registry, '/model', ctx);
+    assert.equal(ctx.models.length, 2);
+    assert.match(ctx.system.at(-1) ?? '', /gpt-5\.6-sol/);
   } finally {
     if (previous === undefined) delete process.env.AGENTFORGE_MODEL;
     else process.env.AGENTFORGE_MODEL = previous;
@@ -204,7 +203,7 @@ test('/clear calls clearConversation and screen commands still route', async () 
   await voidify(commands.get('clear')!.run([], ctx));
   assert.equal(ctx.cleared, 1);
   for (const name of ['help', 'providers', 'models', 'tools', 'skills', 'doctor', 'config', 'settings', 'connect', 'new']) {
-    await voidify(dispatchSlash(registry, `/${name}`, ctx));
+    await dispatchSlash(registry, `/${name}`, ctx);
   }
   const screens = ctx.screens.map((call) => call.screen);
   for (const expected of ['help', 'models', 'models', 'tools', 'skills', 'doctor', 'settings', 'settings', 'connect', 'new-project']) {

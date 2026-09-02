@@ -1160,7 +1160,7 @@ export async function findingsCommand(args: string[], flags: Record<string, stri
 
 /** Gateway (Phase J): serve an OpenAI-compatible endpoint over a local agent. */
 export async function gatewayCommand(args: string[], flags: Record<string, string | boolean>): Promise<number> {
-  const [{ createGatewayServer, listenGateway }, { createModel }] = await Promise.all([
+  const [{ createGatewayServer, listenGateway }, { createModel, DEFAULT_MODEL_IDS }] = await Promise.all([
     import('./gateway/server.js'),
     import('@agentforge-oss/models'),
   ]);
@@ -1170,7 +1170,7 @@ export async function gatewayCommand(args: string[], flags: Record<string, strin
   const modelName = flagString(flags, 'model') ?? process.env.AGENTFORGE_MODEL;
   let modelInstance: unknown;
   try {
-    modelInstance = createModel({ provider, model: modelName ?? 'claude-3-5-sonnet-latest' });
+    modelInstance = createModel({ provider, model: modelName ?? DEFAULT_MODEL_IDS.anthropic });
   } catch (error) {
     throw new Error(`Gateway cannot start: ${(error as Error).message}`);
   }

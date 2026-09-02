@@ -59,19 +59,29 @@ test('merge precedence: project beats global on name collision', () => {
 });
 
 test('resolveActiveProvider env override wins over global defaults', async () => {
-  const bare = await resolveActiveProvider(dir);
-  assert.deepEqual(bare, { provider: undefined, model: undefined, source: 'default' });
-  await setGlobalDefault('openai', 'gpt-4o', dir);
-  const global = await resolveActiveProvider(dir);
-  assert.equal(global.source, 'global');
-  assert.equal(global.provider, 'openai');
-  assert.equal(global.model, 'gpt-4o');
-  process.env.AGENTFORGE_PROVIDER = 'anthropic';
-  process.env.AGENTFORGE_MODEL = 'claude-x';
-  const env = await resolveActiveProvider(dir);
-  assert.equal(env.source, 'env');
-  assert.equal(env.provider, 'anthropic');
-  assert.equal(env.model, 'claude-x');
+  const previousProvider = process.env.AGENTFORGE_PROVIDER;
+  const previousModel = process.env.AGENTFORGE_MODEL;
+  try {
+    const bare = await resolveActiveProvider(dir);
+    assert.deepEqual(bare, { provider: undefined, model: undefined, source: 'default' });
+    await setGlobalDefault('openai', 'gpt-4o', dir);
+    const global = await resolveActiveProvider(dir);
+    assert.equal(global.source, 'global');
+    assert.equal(global.provider, 'openai');
+    assert.equal(global.model, 'gpt-4o');
+    process.env.AGENTFORGE_PROVIDER = 'anthropic';
+    process.env.AGENTFORGE_MODEL = 'claude-x';
+    const env = await resolveActiveProvider(dir);
+    assert.equal(env.source, 'env');
+    assert.equal(env.provider, 'anthropic');
+    assert.equal(env.model, 'claude-x');
+  } finally {
+    // These leak into /model resolution in later suites if left behind.
+    if (previousProvider === undefined) delete process.env.AGENTFORGE_PROVIDER;
+    else process.env.AGENTFORGE_PROVIDER = previousProvider;
+    if (previousModel === undefined) delete process.env.AGENTFORGE_MODEL;
+    else process.env.AGENTFORGE_MODEL = previousModel;
+  }
 });
 
 test('validateProviderConnection missing-env case (no network)', async () => {

@@ -1,42 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
-import { asciiMode, colors } from './theme.js';
-import { currentSkin } from '../skin.js';
+import { asciiMode, colors, glyphs, templeRule } from './theme.js';
 
 const PULSE_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const PULSE_ASCII = ['|', '/', '-', '\\'];
 
-/** ANSI-shadow block letters, stacked two words to fit narrow terminals. */
-const WORDMARK_AGENT = [
-  '██╗    ██╗ ██████╗  ██████╗ ███╗   ██╗████████╗',
-  '██║    ██║██╔════╝ ██╔════╝ ████╗  ██║╚══██╔══╝',
-  '███████║██║  ███╗██║  ███╗██╔██╗ ██║   ██║   ',
-  '██╔══██║██║   ██║██║   ██║██║╚██╗██║   ██║   ',
-  '██║  ██║╚██████╔╝╚██████╔╝██║ ╚████║   ██║   ',
-  '╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ',
-];
-const WORDMARK_FORGE = [
-  '███████╗ ██████╗  ██████╗  ██████╗ ███████╗',
-  '██╔════╝ ██╔══██╗██╔════╝ ██╔════╝ ██╔════╝',
-  '█████╗  ██████╔╝██║  ███╗██║  ███╗█████╗  ',
-  '██╔══╝  ██╔══██╗██║   ██║██║   ██║██╔══╝  ',
-  '██║     ██║  ██║╚██████╔╝╚██████╔╝███████╗',
-  '╚═╝     ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚══════╝',
-];
-
-function Wordmark() {
-  const skin = currentSkin();
-  const c = skin.colors;
-  const ramp = [c.bannerTitle, c.bannerTitle, c.bannerAccent, c.bannerBorder, c.bannerDim, c.bannerDim];
+/**
+ * The carved monument splash (Pharaoh redesign): the name sealed inside a
+ * gold cartouche over a temple-base rule, flanked by the Eye of Horus and
+ * the Ankh. Wide as the cartouche, calm as the throne room.
+ */
+function Monument() {
   return (
     <Box flexDirection="column" alignItems="center">
-      {WORDMARK_AGENT.map((row, index) => (
-        <Text key={`a${index}`} color={ramp[index]}>{row}</Text>
-      ))}
-      <Text> </Text>
-      {WORDMARK_FORGE.map((row, index) => (
-        <Text key={`f${index}`} color={ramp[index]}>{row}</Text>
-      ))}
+      <Text color={colors.bannerTitle}>{templeRule(58)}</Text>
+      <Text bold color={colors.bannerTitle}>   {glyphs.eyeHorus}   A G E N T F O R G E   {glyphs.ankh}   </Text>
+      <Text color={colors.bannerTitle}>{templeRule(58)}</Text>
     </Box>
   );
 }
@@ -86,14 +65,14 @@ export function StartupBanner({
   }
   return (
     <Box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1} paddingY={1}>
-      <Wordmark />
+      <Monument />
       <Box marginTop={1} flexDirection="column" alignItems="center">
-        <Text color={colors.label}>forge agents · plugins · mcp · skills</Text>
+        <Text color={colors.label}>carve agents · code safely · stream models · run workflows</Text>
         <Text dimColor>{modeLine}{version ? ` · v${version.replace(/^v/, '')}` : ''}</Text>
         {provider || model ? (
           <Text dimColor>{provider ?? ''}{model ? ` · ${model}` : ''}</Text>
         ) : null}
-        <Text color={colors.accent}>{glyph}</Text>
+        <Text color={colors.thinking}>{glyph}</Text>
       </Box>
     </Box>
   );

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Text } from 'ink';
-import { asciiMode } from './theme.js';
+import { asciiMode, glyphs, colors } from './theme.js';
 
 const BRAILLE_FRAMES = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834', '\u2826', '\u2827', '\u2807', '\u280f'];
 const ASCII_FRAMES = ['|', '/', '-', '\\'];
+/** The Sculptor's Chisel: a golden ankh turning through carving phases. */
+const ANKH_FRAMES = [glyphs.ankh, '\u25d0', glyphs.ankh, '\u25d1'];
 const DOTS = ['', '.', '..', '...'];
 
 function useFrameInterval(intervalMs: number, active = true): number {
@@ -18,15 +20,18 @@ function useFrameInterval(intervalMs: number, active = true): number {
 
 /**
  * Animated activity indicator: spinner frame + label + animated dots.
- * `<ActivityIndicator label="Loading tools" detail="12/24" />`
+ * The spinner is the golden ankh (Pharaoh theme); ASCII and braille
+ * fallbacks keep every terminal covered.
  */
 export function ActivityIndicator({ label, detail }: { label: string; detail?: string }) {
   const frame = useFrameInterval(80);
-  const glyph = (asciiMode ? ASCII_FRAMES : BRAILLE_FRAMES)[frame % (asciiMode ? ASCII_FRAMES.length : BRAILLE_FRAMES.length)] ?? '';
+  const glyph = asciiMode
+    ? ASCII_FRAMES[frame % ASCII_FRAMES.length] ?? ''
+    : ANKH_FRAMES[frame % ANKH_FRAMES.length] ?? BRAILLE_FRAMES[frame % BRAILLE_FRAMES.length] ?? '';
   const dots = DOTS[frame % DOTS.length] ?? '';
   return (
     <Text>
-      <Text color="cyan">{glyph}</Text> {label}
+      <Text color={colors.bannerTitle}>{glyph}</Text> <Text color={colors.thinking}>{label}</Text>
       {dots ? <Text dimColor>{dots}</Text> : null}
       {detail ? <Text dimColor> ({detail})</Text> : null}
     </Text>

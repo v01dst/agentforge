@@ -99,6 +99,9 @@ export function parseSlashInput(input: string): { name: string; args: string[] }
 }
 
 async function currentModelNames(): Promise<string[]> {
+  // Instant, network-free: static report over config + managed endpoints.
+  // Live endpoint listing happens in the EzStart picker and /models manager —
+  // /model must never block on a network probe.
   let merged: unknown[] = [];
   try {
     const loaded = await loadConfig({ required: false });
@@ -188,7 +191,7 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
       name: 'model',
       description: 'Show or set the session model',
       usage: '/model [name]',
-      argsHint: ['model name — e.g. gpt-4o-mini, claude-sonnet-4, gemini-2.0-flash'],
+      argsHint: ['model id — pick from live list: /models, or e.g. gpt-5.6-sol, claude-opus-5, glm-5.3'],
       category: 'config',
       run: async (args) => {
         const name = args[0];
@@ -196,16 +199,18 @@ export function buildSlashRegistry(handlers: SlashHandlers): RegisteredCommand[]
           ctx.pushSystem(`Current model: ${process.env.AGENTFORGE_MODEL ?? '(unset)'}`);
           return;
         }
+        // Models come from the provider's live endpoint — any id is accepted;
+        // the known list (live fetch → static report) only adds a soft note.
         const names = await currentModelNames();
         const known = new Set(names.map((candidate) => candidate.toLowerCase()));
-        if (known.size > 0 && !known.has(name.toLowerCase())) {
-          ctx.pushSystem(`✗ unknown model '${name}' — known models:\n  ${names.join('\n  ')}\nUse /models to manage endpoints.`);
-          return;
-        }
         process.env.AGENTFORGE_MODEL = name;
         ctx.setSessionModel(name);
         ctx.refreshStatus();
-        ctx.pushSystem(`Model set to ${name}`);
+        if (known.size > 0 && !known.has(name.toLowerCase())) {
+          ctx.pushSystem(`Model set to ${name} (not in the provider's current list — live models: ${names.slice(0, 8).join(', ')}${names.length > 8 ? ', …' : ''})`);
+        } else {
+          ctx.pushSystem(`Model set to ${name}`);
+        }
       },
     },
     {
@@ -714,7 +719,7 @@ export function dispatchSlash(
   registry: readonly RegisteredCommand[],
   input: string,
   pushSystemOrCtx: ((text: string) => void) | CommandContext,
-): boolean {
+): boolean | Promise<boolean> {
   const parsed = parseSlashInput(input);
   if (!parsed) return false;
   const pushSystem = typeof pushSystemOrCtx === 'function' ? pushSystemOrCtx : pushSystemOrCtx.pushSystem;
@@ -726,8 +731,26 @@ export function dispatchSlash(
     pushSystem(`Unknown command: /${parsed.name} — try /help`);
     return true;
   }
-  void executeSafe(entry, parsed.args, ctx);
+  // Await async commands so dispatch observers (tests, sequencing) see the
+  // command's effects; callers that ignore the promise lose nothing.
+  const result = executeSafe(entry, parsed.args, ctx);
+  if (result && typeof (result as Promise<void>).then === 'function') {
+    return (result as Promise<void>).then(() => true, () => true);
+  }
   return true;
+}
+
+function executeSafe(entry: RegisteredCommand, args: string[], ctx: CommandContext): void | Promise<void> {
+  try {
+    const result = entry.run(args, ctx);
+    if (result && typeof (result as Promise<void>).catch === 'function') {
+      return (result as Promise<void>).catch((error: unknown) => reportFailure(entry.name, error, ctx));
+    }
+    return result;
+  } catch (error) {
+    reportFailure(entry.name, error, ctx);
+    return undefined;
+  }
 }
 
 function fallbackContext(pushSystem: (text: string) => void): CommandContext {
@@ -743,16 +766,7 @@ function fallbackContext(pushSystem: (text: string) => void): CommandContext {
   };
 }
 
-function executeSafe(entry: RegisteredCommand, args: string[], ctx: CommandContext): void {
-  try {
-    const result = entry.run(args, ctx);
-    if (result && typeof (result as Promise<void>).catch === 'function') {
-      void (result as Promise<void>).catch((error: unknown) => reportFailure(entry.name, error, ctx));
-    }
-  } catch (error) {
-    reportFailure(entry.name, error, ctx);
-  }
-}
+
 
 /** Resolve a command by name or alias. */
 export function findCommand(registry: readonly RegisteredCommand[], name: string): RegisteredCommand | undefined {

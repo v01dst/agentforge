@@ -77,9 +77,10 @@ test('EzStart preset flow: filter, pick DeepSeek, masked key, model from endpoin
 
       // Provider entry persisted to the project store.
       const providers = JSON.parse(await readFile(join(project, '.agentforge', 'providers.json'), 'utf8')) as { providers: Array<{ name: string; model: string; protocol: string }> };
-      assert.equal(providers.providers[0]!.name, 'deepseek');
-      assert.equal(providers.providers[0]!.model, 'deepseek-v4-flash');
-      assert.equal(providers.providers[0]!.protocol, 'openai-compatible');
+      const deepseek = providers.providers.find((entry) => entry.name === 'deepseek');
+      assert.ok(deepseek, 'deepseek entry saved');
+      assert.equal(deepseek!.model, 'deepseek-v4-flash');
+      assert.equal(deepseek!.protocol, 'openai-compatible');
       // Credential persisted to the home store with 0600.
       const creds = JSON.parse(await readFile(join(home, '.agentforge', 'credentials.json'), 'utf8')) as { entries: Record<string, string>; envs: Record<string, string> };
       assert.equal(creds.entries.deepseek, 'sk-ds-secret');
@@ -138,8 +139,9 @@ test('EzStart custom flow: name → base URL → key → model id → saved', as
       assert.match(frame, /my-gateway ready \(glm-5\.3\)/);
       instance.unmount();
       const providers = JSON.parse(await readFile(join(project, '.agentforge', 'providers.json'), 'utf8')) as { providers: Array<{ name: string; baseUrl?: string; apiKeyEnv?: string }> };
-      assert.equal(providers.providers[0]!.name, 'my-gateway');
-      assert.equal(providers.providers[0]!.baseUrl, 'https://api.mygw.com/v1');
+      const gateway = providers.providers.find((entry) => entry.name === 'my-gateway');
+      assert.ok(gateway, 'custom entry saved');
+      assert.equal(gateway!.baseUrl, 'https://api.mygw.com/v1');
       const creds = JSON.parse(await readFile(join(home, '.agentforge', 'credentials.json'), 'utf8')) as { envs: Record<string, string> };
       assert.equal(Object.values(creds.envs)[0], 'gw-key-123');
     } finally {
