@@ -2,6 +2,35 @@
 
 All notable changes to AgentForge are documented here.
 
+## [1.0.0] — 2026-09-02
+
+The stable release. **First-run now actually enters the new experience** — 0.9.0 shipped the
+Pharaoh TUI and the 16-provider catalog but never routed fresh installs into them.
+
+### Fixed: onboarding wiring (the "3 providers" bug)
+- `interactive.ts` now detects an unconfigured model (no env key, no credentials entry, no
+  managed endpoint) and passes `needsOnboarding` through TuiRoot to ChatHome — first launch
+  opens **EzStart**: the full provider catalog with type-to-filter, masked key entry, and
+  live model listing from the endpoint. `/connect` is the same EzStart flow (the legacy
+  3-provider wizard is gone).
+- `/models` rebuilt: Models / Endpoints / **Add provider** tabs — the last opens the
+  16-preset catalog (OpenRouter, DeepSeek, Groq, xAI, Mistral, Together, Fireworks,
+  Cerebras, Moonshot/Kimi, Z.AI/GLM, Perplexity, Ollama, LM Studio + OpenAI/Anthropic/
+  Google), saves keys to `~/.agentforge/credentials.json` (0600), and fetches the live
+  model list after saving.
+
+### Fixed: monument layout
+- Dropped Ink `Static` — the Cartouche now stays pinned at the top of the frame instead of
+  scrolling above the transcript; the Scribe's Tablet anchors the bottom.
+- Completed tools render once, in the transcript (`│ ✓ 𓋴 carved read_file 12ms`); only
+  in-flight tools appear in the live chisel line (`𓂀 carving: …`).
+- Temple rule clamps to terminal width; tool events without an explicit state normalize
+  to `done` when `ms` is present.
+
+### Verified
+- Rendered-frame layout test (cartouche above transcript above tablet, glyphs present).
+- CLI suite 283/283; clean-room `npm install` verified post-publish.
+
 ## [Unreleased]
 
 ### License: Apache-2.0 — free for commercial use (published as 0.9.0)

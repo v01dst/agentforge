@@ -6,7 +6,7 @@
 
 **The terminal forge: a model-agnostic agent runtime, coding agent, and extension platform — carved to last.**
 
-[![version](https://img.shields.io/badge/version-0.9.0-D4A017)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.0.0-D4A017)](CHANGELOG.md)
 [![node](https://img.shields.io/badge/node-%E2%89%A520.11-339933?logo=node.js&logoColor=white)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-9-F69220?logo=pnpm&logoColor=white)](pnpm-workspace.yaml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
@@ -56,7 +56,7 @@ Packages ship to npm under the `@agentforge-oss` scope — the CLI installs glob
 
 ```bash
 npm install -g @agentforge-oss/cli
-agentforge --version          # v0.9.0
+agentforge --version          # v1.0.0
 
 # or run it without installing
 npx @agentforge-oss/cli chat
