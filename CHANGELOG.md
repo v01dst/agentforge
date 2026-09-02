@@ -4,7 +4,7 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
-### License: Apache-2.0 — free for commercial use
+### License: Apache-2.0 — free for commercial use (published as 0.9.0)
 
 - AgentForge is relicensed back to **Apache-2.0**: free to use, modify, and distribute for **any purpose, including commercial**. The PolyForm Noncommercial + paid-commercial-licensing arrangement is withdrawn.
 - All 12 `package.json` `license` fields return to `Apache-2.0`; the README badge, License section, banner chip, and CONTRIBUTING terms updated to match.

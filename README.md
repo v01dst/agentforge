@@ -6,7 +6,7 @@
 
 **The terminal forge: a model-agnostic agent runtime, coding agent, and extension platform — carved to last.**
 
-[![version](https://img.shields.io/badge/version-0.1.0-D4A017)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.9.0-D4A017)](CHANGELOG.md)
 [![node](https://img.shields.io/badge/node-%E2%89%A520.11-339933?logo=node.js&logoColor=white)](package.json)
 [![pnpm](https://img.shields.io/badge/pnpm-9-F69220?logo=pnpm&logoColor=white)](pnpm-workspace.yaml)
 [![license](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
@@ -56,7 +56,7 @@ Packages ship to npm under the `@agentforge-oss` scope — the CLI installs glob
 
 ```bash
 npm install -g @agentforge-oss/cli
-agentforge --version          # v0.1.0
+agentforge --version          # v0.9.0
 
 # or run it without installing
 npx @agentforge-oss/cli chat
@@ -349,9 +349,7 @@ a doom-loop guard, NDJSON session logs with forking, an LSP bridge, profiles, a 
 observability core, security findings, session modes, an OpenAI-compatible gateway, a
 supervised daemon, deterministic benchmarks, webhook/Telegram channels, desktop device tools,
 and the Pharaoh's Monument TUI with ez-start onboarding and live model discovery across 16
-providers — verified by ~282 deterministic tests. The 1.0 line begins at version `0.1.0`
-(in-repo; registry numbers were consumed by earlier development releases). Experimental but
-hard at work; APIs may still change.
+providers — verified by ~282 deterministic tests. Experimental but hard at work.
 
 See [CHANGELOG.md](CHANGELOG.md) for the release history and
 [PROJECT_STATUS_AND_ROADMAP.md](PROJECT_STATUS_AND_ROADMAP.md) for the honest gap list.
