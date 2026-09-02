@@ -166,3 +166,51 @@ test('EzStart skip calls onSkip', async () => {
   instance.unmount();
 });
 
+
+test('EzStart: Esc on the welcome screen skips; Esc at model step restarts the picker', async () => {
+  let skipped = false;
+  const instance = render(React.createElement(EzStart, { onComplete: () => {}, onSkip: () => { skipped = true; } }));
+  await delay(30);
+  instance.stdin.write('\u001b'); // esc at welcome = skip
+  await delay(40);
+  assert.equal(skipped, true, 'welcome esc triggers onSkip');
+  instance.unmount();
+
+  const home2 = await mkdtemp(`${tmpdir()}/af-ezesc-`);
+  const project = await mkdtemp(`${tmpdir()}/af-ezesc-p-`);
+  const previousHome = process.env.HOME;
+  const previousCwd = process.cwd();
+  process.env.HOME = home2;
+  process.chdir(project);
+  try {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(JSON.stringify({ data: [{ id: 'deepseek-v4-flash' }] }), { status: 200 })) as typeof fetch;
+    try {
+      const instance2 = render(React.createElement(EzStart, { onComplete: () => {}, onSkip: () => {} }));
+      await delay(30);
+      instance2.stdin.write('1');
+      await delay(40);
+      instance2.stdin.write('deepseek');
+      await delay(40);
+      instance2.stdin.write('\r');
+      await delay(40);
+      instance2.stdin.write('sk-key');
+      await delay(40);
+      instance2.stdin.write('\r');
+      await delay(150); // model picker renders
+      instance2.stdin.write('\u001b'); // esc at model step
+      await delay(40);
+      const frame = instance2.lastFrame() ?? '';
+      assert.match(frame, /Pick a provider/, 'esc restarts the picker');
+      instance2.unmount();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    process.chdir(previousCwd);
+    await rm(home2, { recursive: true, force: true });
+    await rm(project, { recursive: true, force: true });
+  }
+});

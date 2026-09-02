@@ -56,6 +56,7 @@ export function EzStart({ onComplete, onSkip }: EzStartProps): React.ReactElemen
         if (value === '1') setStep({ kind: 'preset-pick', query: '', index: 0 });
         else if (value === '2') setStep({ kind: 'custom', field: 'name', name: '', baseUrl: '', key: '', model: '' });
         else if (value === 's' || value === 'S') onSkip();
+        else if (key.escape) onSkip();
         return;
       }
       case 'preset-pick': {
@@ -94,6 +95,7 @@ export function EzStart({ onComplete, onSkip }: EzStartProps): React.ReactElemen
       }
       case 'model': {
         if (step.loading) { pendingConfirm.current = true; return; }
+        if (key.escape) { setStep({ kind: 'preset-pick', query: '', index: 0 }); return; }
         if (key.upArrow) { setStep({ ...step, index: Math.max(0, step.index - 1) }); return; }
         if (key.downArrow) { setStep({ ...step, index: Math.min(Math.max(step.models.length - 1, 0), step.index + 1) }); return; }
         if (key.backspace || key.delete) { setStep({ ...step, typed: step.typed.slice(0, -1), index: step.models.length }); return; }
@@ -135,6 +137,7 @@ export function EzStart({ onComplete, onSkip }: EzStartProps): React.ReactElemen
         return;
       }
       case 'failed': {
+        if (key.escape) { setStep({ kind: 'welcome' }); return; }
         if (value === 'r' || value === 'R') { step.retry(); return; }
         if (step.saveAnyway && (value === 's' || value === 'S')) {
           void saveForced(step.saveAnyway.entryName, step.saveAnyway.preset, step.saveAnyway.model);

@@ -85,10 +85,29 @@ const PHARAOH_COLORS: SkinPalette = {
   prompt: '#FDF5E6',
 };
 
-/** Same monument on a night-sky indigo background. */
+/** Night sky over the desert — indigo ground, warmer gold, cool stone. */
 const PHARAOH_INDIGO_COLORS: SkinPalette = {
-  ...PHARAOH_COLORS,
+  bannerTitle: '#E8C547',
+  bannerAccent: '#D4A017',
+  bannerDim: '#9BA8C0',
+  bannerBorder: '#D4A017',
   bannerText: '#F5EFE0',
+  uiAccent: '#48C9B0',
+  uiOk: '#48C9B0',
+  uiError: '#E67E22',
+  uiWarn: '#E67E22',
+  uiTool: '#48C9B0',
+  uiThinking: '#E67E22',
+  uiLabel: '#E8C547',
+  diffAddedWord: '#48C9B0',
+  diffRemovedWord: '#E67E22',
+  diffAddedBg: '#0E2A26',
+  diffRemovedBg: '#33200E',
+  syntaxString: '#D4A017',
+  syntaxNumber: '#F5EFE0',
+  syntaxKeyword: '#E8C547',
+  syntaxComment: '#9BA8C0',
+  prompt: '#F5EFE0',
 };
 
 const MIDNIGHT_COLORS: SkinPalette = {  bannerTitle: '#22d3ee',
@@ -146,7 +165,7 @@ export const BUILT_IN_SKINS: Record<string, Skin> = {
   paper: { name: 'paper', description: 'Light-terminal friendly', colors: PAPER_COLORS },
 };
 
-export const DEFAULT_SKIN_NAME = 'pharaoh';
+export const DEFAULT_SKIN_NAME = 'pharaoh-indigo';
 
 const PALETTE_KEYS = Object.keys(FORGE_COLORS) as Array<keyof SkinPalette>;
 

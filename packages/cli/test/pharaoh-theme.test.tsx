@@ -6,14 +6,14 @@ import { ScribesTablet } from '../src/ui/shell/ChatHome.js';
 import { glyphs, templeRule, colors } from '../src/ui/shell/theme.js';
 import { DEFAULT_SKIN_NAME, currentSkin } from '../src/ui/skin.js';
 
-test('pharaoh is the default skin with the monument palette', () => {
-  assert.equal(DEFAULT_SKIN_NAME, 'pharaoh');
+test('pharaoh-indigo is the default skin — night sky over the desert', () => {
+  assert.equal(DEFAULT_SKIN_NAME, 'pharaoh-indigo');
   const palette = currentSkin().colors;
-  assert.equal(palette.bannerTitle, '#D4A017');       // Pharaoh's Gold
-  assert.equal(palette.bannerText, '#FDF5E6');        // Papyrus White
+  assert.equal(palette.bannerTitle, '#E8C547');       // warm gold on indigo
+  assert.equal(palette.bannerText, '#F5EFE0');        // papyrus white
   assert.equal(palette.uiOk, '#48C9B0');              // Nile turquoise
-  assert.equal(palette.uiThinking, '#E67E22');        // Desert sand
-  assert.equal(palette.bannerDim, '#8E8E8E');         // Stone gray
+  assert.equal(palette.uiThinking, '#E67E22');        // desert sand
+  assert.equal(palette.bannerDim, '#9BA8C0');         // cool stone
 });
 
 test('glyph tokens resolve hieroglyphs under AGENTFORGE_GLYPHS=unicode', async () => {

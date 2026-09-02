@@ -219,10 +219,13 @@ function HeaderCartouche({ provider, connected }: { provider?: string; connected
   const ruleWidth = Math.max(24, columns - 4);
   return (
     <Box flexDirection="column" marginBottom={1}>
+      {/* Giza skyline — the small, the great, the middle pyramid */}
       <Box justifyContent="space-between">
-        <Text bold color={colors.bannerTitle}>{glyphs.eyeHorus}  AGENTFORGE  {glyphs.ankh}</Text>
+        <Text color={colors.label}>{'     ▲       ▲▲▲     ▲'}</Text>
         <Text color={online ? colors.uiOk : colors.thinking}>{online ? `${glyphs.online} ONLINE` : `${glyphs.scribe} OFFLINE`}</Text>
       </Box>
+      <Text color={colors.bannerTitle}>{'    ▲▲▲     ▲▲▲▲▲   ▲▲▲'}</Text>
+      <Text bold color={colors.bannerTitle}>{glyphs.eyeHorus}  AGENTFORGE  {glyphs.ankh}</Text>
       <Text color={colors.bannerTitle}>{templeRule(ruleWidth)}</Text>
     </Box>
   );
@@ -275,6 +278,8 @@ export function ChatHome({ runner, commands, onSlashCommand, provider, model, ac
   const [menuDismissed, setMenuDismissed] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  /** EzStart completed or skipped — the composer takes over from here. */
+  const [onboarded, setOnboarded] = useState(false);
   const draftRef = useRef('');
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -352,7 +357,7 @@ export function ChatHome({ runner, commands, onSlashCommand, provider, model, ac
   // commands (rendered once, before the first message). During first-run
   // onboarding the EzStart flow takes over instead.
   useEffect(() => {
-    if (needsOnboarding) return;
+    if (showOnboarding) return;
     pushSystem('AgentForge ready — type a message to chat, or / for commands. /help lists everything.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -361,6 +366,7 @@ export function ChatHome({ runner, commands, onSlashCommand, provider, model, ac
     if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
   }, []);
 
+  const showOnboarding = needsOnboarding && !onboarded;
   const menuOpen = input.startsWith('/') && !menuDismissed;
   const filtered = useMemo(() => {
     if (!menuOpen) return [];
@@ -532,6 +538,7 @@ export function ChatHome({ runner, commands, onSlashCommand, provider, model, ac
   };
 
   useInput((value, key) => {
+    if (showOnboarding) return; // EzStart owns the keyboard while onboarding
     if (key.ctrl && value === 'c') {
       if (running) { cancel(); return; }
       if (showExitConfirm) { process.exit(0); }
@@ -601,19 +608,23 @@ export function ChatHome({ runner, commands, onSlashCommand, provider, model, ac
 
   return (
     <Box flexDirection="column">
-      <HeaderCartouche provider={provider} connected={!needsOnboarding} />
+      <HeaderCartouche provider={provider} connected={!showOnboarding} />
       {messages.map((message, index) => <MessageRow key={index} message={message} />)}
       {streamingText ? <AgentBlock text={streamingText} streaming /> : null}
       <ToolTimeline events={toolEvents} />
       {running ? <ActivityIndicator label={activity ?? 'working… (Ctrl-C to cancel)'} /> : null}
       {lastError && !running ? <InlineError message={lastError} /> : null}
-      {needsOnboarding ? (
+      {showOnboarding ? (
         <EzStart
           onComplete={(result) => {
+            setOnboarded(true);
             pushSystem(`✓ connected to ${result.name} (${result.model}) — say hello!`);
             onProviderConnected?.();
           }}
-          onSkip={() => pushSystem('skipped setup — no model connected yet. /connect or /providers anytime.')}
+          onSkip={() => {
+            setOnboarded(true);
+            pushSystem('skipped — no model yet. Type /connect anytime, or explore: /help, /tools, /agents work without one.');
+          }}
         />
       ) : null}
       {showExitConfirm ? <Text color="yellow">Press Ctrl+C again to exit</Text> : null}
