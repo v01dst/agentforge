@@ -2,8 +2,8 @@ import React from 'react';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { render } from 'ink-testing-library';
-import { ChatHome } from '/root/mura/packages/cli/src/ui/shell/ChatHome.js';
-import type { TurnRunner } from '/root/mura/packages/cli/src/ui/turn.js';
+import { ChatHome } from '../src/ui/shell/ChatHome.js';
+import type { TurnRunner } from '../src/ui/turn.js';
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
