@@ -29,7 +29,7 @@
   <!-- status chips row -->
   <g font-family="'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="12.5">
     <rect x="64" y="172" width="64" height="24" rx="12" fill="none" stroke="#D4A017" stroke-opacity="0.6"/>
-    <text x="96" y="188" text-anchor="middle" fill="#D4A017">1.0.1</text>
+    <text x="96" y="188" text-anchor="middle" fill="#D4A017">1.0.2</text>
     <rect x="138" y="172" width="120" height="24" rx="12" fill="none" stroke="#48C9B0" stroke-opacity="0.5"/>
     <text x="198" y="188" text-anchor="middle" fill="#48C9B0">𓋹 16 providers</text>
     <rect x="268" y="172" width="100" height="24" rx="12" fill="none" stroke="#FFFFFF" stroke-opacity="0.14"/>

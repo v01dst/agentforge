@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-oss/sdk",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Convenience SDK facade for AgentForge runtime packages.",
   "license": "Apache-2.0",
   "type": "module",

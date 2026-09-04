@@ -4,6 +4,14 @@ All notable changes to AgentForge are documented here.
 
 ## [Unreleased]
 
+### 1.0.2 — live models everywhere
+
+- **`/models` detail fetches live**: selecting a provider row on the Models tab queries the provider's endpoint (`/models`) and lists its current model ids — preset catalog first, managed endpoint fallback, honest error when neither lists. No static lists anywhere in the TUI.
+- **Esc during model-fetch loading** cancels cleanly instead of being swallowed (regression from 1.0.1's queued-confirm).
+- Tests: 285/285 (live-fetch suite with a stubbed endpoint added).
+
+## [1.0.1] — 2026-09-02
+
 ### 1.0.1 — polish pass on user feedback
 
 - **Giza skyline in the header**: carved pyramid silhouettes (`▲ ▲▲▲`) above the cartouche.
