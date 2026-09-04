@@ -60,3 +60,41 @@ test('HelpOverlay renders its sections and exports SHORTCUTS with CLI equivalent
   assert.ok(SHORTCUTS.length > 0);
   assert.ok(SHORTCUTS.some((shortcut) => shortcut.cli === 'agentforge chat'));
 });
+
+test('Models tab fetches live models from the endpoint on enter', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL) => {
+    if (String(url).includes('/models')) {
+      return new Response(JSON.stringify({ data: [{ id: 'stub-live-1' }, { id: 'stub-live-2' }] }), { status: 200 });
+    }
+    return new Response('{}', { status: 404 });
+  }) as typeof fetch;
+  try {
+    const instance = render(React.createElement(ModelsScreen, {
+      rows: [{
+        provider: 'myproxy',
+        description: 'Managed endpoint',
+        defaultModel: 'vendor/model-x',
+        envVars: ['MYPROXY_KEY'],
+        ready: true,
+        source: 'config',
+      }],
+      endpoints: [{ name: 'myproxy', protocol: 'openai-compatible', baseUrl: 'https://proxy.example/v1', model: 'vendor/model-x', apiKeyEnv: 'MYPROXY_KEY' }],
+    }));
+    await delay(60);
+    // The 'myproxy' row is selected by default on the Models tab.
+    instance.stdin.write('\r'); // enter → open detail + live fetch
+    let frame = '';
+    for (let i = 0; i < 30; i += 1) {
+      await delay(50);
+      frame = instance.lastFrame() ?? '';
+      if (frame.includes('stub-live-1')) break;
+    }
+    assert.match(frame, /stub-live-1/);
+    assert.match(frame, /stub-live-2/);
+    assert.match(frame, /live models/);
+    instance.unmount();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

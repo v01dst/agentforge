@@ -94,8 +94,9 @@ export function EzStart({ onComplete, onSkip }: EzStartProps): React.ReactElemen
         return;
       }
       case 'model': {
+        // Esc works during loading too — never trap the user behind a fetch.
+        if (key.escape) { pendingConfirm.current = false; setStep({ kind: 'preset-pick', query: '', index: 0 }); return; }
         if (step.loading) { pendingConfirm.current = true; return; }
-        if (key.escape) { setStep({ kind: 'preset-pick', query: '', index: 0 }); return; }
         if (key.upArrow) { setStep({ ...step, index: Math.max(0, step.index - 1) }); return; }
         if (key.downArrow) { setStep({ ...step, index: Math.min(Math.max(step.models.length - 1, 0), step.index + 1) }); return; }
         if (key.backspace || key.delete) { setStep({ ...step, typed: step.typed.slice(0, -1), index: step.models.length }); return; }

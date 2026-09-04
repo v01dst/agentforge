@@ -9,6 +9,7 @@ import {
   type ProviderEntry,
 } from '../../providers-store.js';
 import { PROVIDER_PRESETS, getPreset, type ProviderPreset } from '../../providers-catalog.js';
+import { resolveCredential } from '../../credentials.js';
 import { saveCredential } from '../../credentials.js';
 import { listProviderModels } from '@agentforge-oss/models';
 import { type ScreenProps, badge, envState } from './screens-common.js';
@@ -42,6 +43,7 @@ export function ModelsScreen({ onBack, rows, endpoints }: ModelsScreenProps): Re
   const [entries, setEntries] = useState<readonly ProviderEntry[]>(endpoints ?? []);
   const [selected, setSelected] = useState(0);
   const [detail, setDetail] = useState<ModelInfoRow | null>(null);
+  const [liveModels, setLiveModels] = useState<Record<string, { ids: readonly string[]; error?: string; loading?: boolean }>>({});
   const [status, setStatus] = useState<string>('');
   // add-form state
   const [adding, setAdding] = useState(false);
@@ -57,6 +59,39 @@ export function ModelsScreen({ onBack, rows, endpoints }: ModelsScreenProps): Re
   const presetMatches = presetFilter
     ? PROVIDER_PRESETS.filter((preset) => `${preset.id} ${preset.label} ${preset.hint}`.toLowerCase().includes(presetFilter.toLowerCase()))
     : PROVIDER_PRESETS;
+
+
+  /**
+   * Fetch the live model list for a provider row (0.9): resolves the
+   * endpoint from the preset catalog or a managed entry, then queries the
+   * provider's own /models. Presets are the fallback when listing fails.
+   */
+  const fetchLive = (providerName: string): void => {
+    if (liveModels[providerName]?.ids?.length || liveModels[providerName]?.loading) return;
+    setLiveModels((previous) => ({ ...previous, [providerName]: { ids: [], loading: true } }));
+    void (async () => {
+      const { listProviderModelIds } = await import('@agentforge-oss/models');
+      const preset = getPreset(providerName === 'gemini' ? 'google' : providerName);
+      const entry = entries.find((candidate) => candidate.name === providerName);
+      try {
+        if (preset) {
+          const apiKey = preset.apiKeyEnv ? await resolveCredential(preset.apiKeyEnv) : undefined;
+          const ids = await listProviderModelIds({ protocol: preset.protocol, baseUrl: preset.baseUrl, apiKey, timeoutMs: 5000 });
+          setLiveModels((previous) => ({ ...previous, [providerName]: { ids } }));
+          return;
+        }
+        if (entry?.baseUrl) {
+          const apiKey = entry.apiKeyEnv ? await resolveCredential(entry.apiKeyEnv) : undefined;
+          const ids = await listProviderModelIds({ protocol: entry.protocol as 'openai-compatible', baseUrl: entry.baseUrl, apiKey, timeoutMs: 5000 });
+          setLiveModels((previous) => ({ ...previous, [providerName]: { ids } }));
+          return;
+        }
+        setLiveModels((previous) => ({ ...previous, [providerName]: { ids: [], error: 'no endpoint configured for this provider' } }));
+      } catch (error) {
+        setLiveModels((previous) => ({ ...previous, [providerName]: { ids: [], error: error instanceof Error ? error.message : String(error) } }));
+      }
+    })();
+  };
 
   useEffect(() => {
     let alive = true;
@@ -215,7 +250,9 @@ export function ModelsScreen({ onBack, rows, endpoints }: ModelsScreenProps): Re
       if (key.downArrow) { setSelected((s) => (s + 1) % listLength); return; }
     }
     if (key.return && tab === 'Models') {
-      setDetail(reportRows[selected] ?? null);
+      const row = reportRows[selected] ?? null;
+      setDetail(row);
+      if (row) void fetchLive(row.provider);
       return;
     }
     if (key.return && tab === 'Endpoints' && entries[selected]) {
@@ -289,10 +326,19 @@ export function ModelsScreen({ onBack, rows, endpoints }: ModelsScreenProps): Re
           ))}
           {detail ? (
             <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor={colors.border} paddingX={1}>
-              <Text bold>{detail.provider}</Text>
+              <Text bold>𓂀 {detail.provider}</Text>
               <Text dimColor>{detail.description}</Text>
               <Text>default model: {detail.defaultModel ?? '(none)'}</Text>
-              <Text dimColor>live model lists are fetched during provider setup (EzStart / Add provider)</Text>
+              {liveModels[detail.provider]?.loading ? <Text color={colors.thinking}>  𓂀 fetching models from the endpoint…</Text> : null}
+              {liveModels[detail.provider]?.error ? <Text color={colors.error}>  ✗ {liveModels[detail.provider]!.error}</Text> : null}
+              {liveModels[detail.provider]?.ids?.length ? (
+                <Box flexDirection="column">
+                  <Text color={colors.uiOk}>  ✓ 𓋴 {liveModels[detail.provider]!.ids.length} live models:</Text>
+                  {liveModels[detail.provider]!.ids.slice(0, 12).map((id) => <Text key={id} color={colors.text}>    {id}</Text>)}
+                  {liveModels[detail.provider]!.ids.length > 12 ? <Text dimColor>    … and {liveModels[detail.provider]!.ids.length - 12} more</Text> : null}
+                </Box>
+              ) : null}
+              {!liveModels[detail.provider] ? <Text dimColor>  enter again re-checks…</Text> : null}
             </Box>
           ) : null}
         </Box>
