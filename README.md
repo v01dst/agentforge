@@ -363,3 +363,15 @@ See [CHANGELOG.md](CHANGELOG.md) for the release history and
 
 [Apache-2.0](LICENSE) — free to use, modify, and distribute, **including commercial use**.
 No paid license, no restrictions beyond the standard Apache 2.0 terms.
+
+
+## Contributing
+
+AgentForge is easiest to contribute to when changes stay focused and testable.
+
+1. Make the smallest change that solves the issue.
+2. Add or update tests for behavior changes.
+3. Run the workspace checks before opening a PR.
+4. Explain the user-visible behavior and any compatibility impact in the PR description.
+
+For runtime, model-adapter, or tool changes, prefer deterministic tests so contributions remain useful without requiring a live model provider.
